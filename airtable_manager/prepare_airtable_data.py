@@ -39,35 +39,24 @@ def extract_unique_lenses(data: dict) -> list:
     """
     Extract unique lenses from pattern documents
     
-    Returns: List of dicts with lens_name, content (summary), and patterns (list of pattern titles)
+    Returns: List of dicts with lens_name and content only
+    Note: Airtable will automatically create reverse links showing which patterns use each lens
     """
-    lens_to_data = {}
+    lens_to_content = {}
     
     for doc in data.get("documents", []):
         lens_name = doc.get("lens", "")
         summary = doc.get("summary", "")
         
-        if lens_name:
-            if lens_name not in lens_to_data:
-                lens_to_data[lens_name] = {
-                    "lens_name": lens_name,
-                    "content": summary,
-                    "patterns": []
-                }
-            
-            # Add all patterns from this document
-            for pattern in doc.get("patterns", []):
-                pattern_title = pattern.get("title", "").strip()
-                if pattern_title:
-                    lens_to_data[lens_name]["patterns"].append(pattern_title)
+        if lens_name and lens_name not in lens_to_content:
+            lens_to_content[lens_name] = summary
     
-    # Convert patterns list to comma-separated string
+    # Convert to list format
     lenses = []
-    for lens_data in lens_to_data.values():
+    for lens_name in sorted(lens_to_content.keys()):
         lenses.append({
-            "lens_name": lens_data["lens_name"],
-            "content": lens_data["content"],
-            "patterns": ", ".join(lens_data["patterns"])  # Comma-separated list
+            "lens_name": lens_name,
+            "content": lens_to_content[lens_name]
         })
     
     return lenses
@@ -77,38 +66,26 @@ def extract_unique_sources(data: dict) -> list:
     """
     Extract unique sources from all patterns
     
-    Returns: List of dicts with source_name and patterns (list of pattern titles)
+    Returns: List of dicts with source_name only
+    Note: Airtable will automatically create reverse links showing which patterns use each source
     """
-    source_to_patterns = {}
+    sources = set()
     
     for doc in data.get("documents", []):
         for pattern in doc.get("patterns", []):
             source = pattern.get("source", "").strip()
-            pattern_title = pattern.get("title", "").strip()
-            
             if source:
-                if source not in source_to_patterns:
-                    source_to_patterns[source] = []
-                if pattern_title:
-                    source_to_patterns[source].append(pattern_title)
+                sources.add(source)
     
-    # Convert to list format
-    sources = []
-    for source_name in sorted(source_to_patterns.keys()):
-        sources.append({
-            "source_name": source_name,
-            "patterns": ", ".join(source_to_patterns[source_name])  # Comma-separated list
-        })
-    
-    return sources
+    return [{"source_name": s} for s in sorted(sources)]
 
 
 def prepare_metas(data: dict) -> list:
     """
     Prepare METAS for CSV export
     
-    Schema: title, subtitle, content, base_folder, linked_patterns
-    linked_patterns: Empty for now - will be linked manually in Airtable UI
+    Schema: title, subtitle, content, base_folder
+    Note: linked_patterns will be added manually in Airtable UI after Patterns are imported
     
     Returns: List of METAS dicts
     """
@@ -119,8 +96,7 @@ def prepare_metas(data: dict) -> list:
             "title": meta.get("title", ""),
             "subtitle": meta.get("subtitle", ""),
             "content": meta.get("content", ""),
-            "base_folder": meta.get("base_folder", ""),
-            "linked_patterns": ""  # Empty - to be linked in Airtable UI
+            "base_folder": meta.get("base_folder", "")
         })
     
     return metas
@@ -376,19 +352,19 @@ def main():
     write_csv(
         os.path.join(OUTPUT_DIR, "lenses.csv"),
         lenses,
-        ["lens_name", "content", "patterns"]
+        ["lens_name", "content"]
     )
     
     write_csv(
         os.path.join(OUTPUT_DIR, "sources.csv"),
         sources,
-        ["source_name", "patterns"]
+        ["source_name"]
     )
     
     write_csv(
         os.path.join(OUTPUT_DIR, "metas.csv"),
         metas,
-        ["title", "subtitle", "content", "base_folder", "linked_patterns"]
+        ["title", "subtitle", "content", "base_folder"]
     )
     
     write_csv(
