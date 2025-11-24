@@ -109,7 +109,7 @@ def clean_label(text):
 def extract_summary(paragraphs):
     """
     Extract summary - text before Task 1 or first Pattern.
-    Excludes first line (title) and requires minimum 2 lines.
+    Excludes first line (title) and requires minimum 3 lines.
     Returns (summary_text, has_summary)
     """
     summary_lines = []
@@ -122,7 +122,7 @@ def extract_summary(paragraphs):
             continue
         
         # Check if we've hit the pattern section
-        if re.match(r'^(Task\s+1|TASK\s+1|Pattern\s+1)', text, re.IGNORECASE):
+        if re.match(r'^(Task\s+1|TASK\s+1|Pattern\s+1|Part\s+I)', text, re.IGNORECASE):
             break
         
         # Skip title-only paragraphs (all caps, short)
@@ -140,9 +140,12 @@ def extract_summary(paragraphs):
         
         summary_lines.append(text)
     
-    # Require at least 2 lines for a valid summary
-    if len(summary_lines) >= 2:
-        return "\n\n".join(summary_lines), True
+    # Require at least 3 lines for a valid summary
+    if len(summary_lines) >= 3:
+        # Replace \n literal with actual newlines
+        summary_text = "\n\n".join(summary_lines)
+        summary_text = summary_text.replace('\\n', ' ')  # Replace \n literals with space
+        return summary_text, True
     return "", False
 
 def extract_patterns(paragraphs):
@@ -210,18 +213,57 @@ def extract_variations(paragraphs):
     while i < len(paragraphs):
         text = paragraphs[i].text.strip()
         
-        # Format: "Variation X – Pattern Y: Title"
-        variation_match = re.match(
-            r'^Variation\s+(\d+)\s*[–-]\s*Pattern\s+(\d+):\s*(.+)$',
-            text,
-            re.IGNORECASE
-        )
+        # Multiple variation formats:
+        # 1. "VARIATION 6 – PATTERN 6: Title"
+        # 2. " – PATTERN 5: Title" (missing variation number)
+        # 3. "Variation 6 — Title" (no PATTERN prefix)
+        # 4. "0 — Title" (typo for "10")
+        
+        variation_match = None
+        variation_number = None
+        pattern_ref = None
+        title = None
+        
+        # Try format: "VARIATION X – PATTERN Y: Title" or "VARIATION X — PATTERN Y: Title"
+        match = re.match(r'^VARIATION\s+(\d+)\s*[–—-]\s*PATTERN\s+(\d+):\s*(.+)$', text, re.IGNORECASE)
+        if match:
+            variation_number = int(match.group(1))
+            pattern_ref = int(match.group(2))
+            title = match.group(3).strip()
+            variation_match = True
+        
+        # Try format: " – PATTERN X: Title" (missing variation number)
+        if not variation_match:
+            match = re.match(r'^\s*[–—-]\s*PATTERN\s+(\d+):\s*(.+)$', text, re.IGNORECASE)
+            if match:
+                pattern_ref = int(match.group(1))
+                title = match.group(2).strip()
+                variation_number = pattern_ref  # Use pattern number as variation number
+                variation_match = True
+        
+        # Try format: "Variation X — Title" or "Variation X – Title"
+        if not variation_match:
+            match = re.match(r'^Variation\s+(\d+)\s*[–—-]\s*(.+)$', text, re.IGNORECASE)
+            if match:
+                variation_number = int(match.group(1))
+                title = match.group(2).strip()
+                pattern_ref = 1  # Default to pattern 1 if not specified
+                variation_match = True
+        
+        # Try format: "X — Title" (just number and title, handle "0" as "10")
+        if not variation_match:
+            match = re.match(r'^(\d+)\s*[–—-]\s*(.+)$', text)
+            if match:
+                num = int(match.group(1))
+                # Handle "0" as "10"
+                if num == 0:
+                    num = 10
+                variation_number = num
+                title = match.group(2).strip()
+                pattern_ref = 1  # Default to pattern 1
+                variation_match = True
         
         if variation_match:
-            variation_number = int(variation_match.group(1))
-            pattern_ref = int(variation_match.group(2))
-            title = variation_match.group(3).strip()
-            
             # Get next non-empty paragraph as content
             content = ""
             j = i + 1
@@ -233,7 +275,8 @@ def extract_variations(paragraphs):
                     j += 1
                     continue
                 
-                if re.match(r'^(Pattern|Variation)\s+\d+', para_text, re.IGNORECASE):
+                # Stop if we hit another pattern or variation
+                if re.match(r'^(Pattern|Variation|VARIATION|\d+\s*[–—-])\s', para_text, re.IGNORECASE):
                     break
                 
                 content = para_text
@@ -301,9 +344,15 @@ def process_file(file_path, root_dir, logger):
             logger.log_skip(rel_path, "No patterns found")
             return None
         
-        # Skip if summary is less than 2 lines
-        if not has_summary or len(summary.split('\n')) < 2:
-            logger.log_skip(rel_path, "Summary less than 2 lines")
+        # Skip if summary is less than 3 lines
+        if not has_summary:
+            logger.log_skip(rel_path, "No summary found")
+            return None
+        
+        # Count actual lines (split by double newline)
+        summary_parts = [p.strip() for p in summary.split('\n\n') if p.strip()]
+        if len(summary_parts) < 3:
+            logger.log_skip(rel_path, "Summary less than 3 lines")
             return None
         
         # Build structure
