@@ -1,0 +1,86 @@
+ARCHITECTURE DECISION
+for Airtable → Google Drive syncing:
+Option— automated sync
+A small script keeps Airtable tables (Patterns, Documents, Lenses, Themes) synced as CSV or JSON into a fixed Google Drive folder.
+Option — Gemini API Actions
+Gemini will eventually query Airtable directly through actions, so it always has the latest structured metadata without us touching anything.
+Either approach means:
+Gemini ALWAYS has access to:
+the Airtable index (metadata, structure, pattern numbers, lenses, themes, tags)
+the underlying Google Docs (full content)
+BOTH datasets in a single query
+We will NOT be uploading anything manually on each query.
+
+HOW WE WILL QUERY THE SYSTEM
+We use two workflows — and you should design the schema assuming BOTH workflows will be used constantly.
+
+A. MAIN WORKFLOW — User-Friendly English Queries Through Gemini
+Gemini should function like a research assistant that understands:
+the structured index (Airtable)
+the full corpus text (Google Docs)
+our ontology (patterns, lenses, themes, conflicts, choices)
+Here are the kinds of queries we expect Gemini to handle — this is a core requirement and should guide your schema:
+
+1. Pattern-Level Retrieval
+“Show me all Pattern 7s across the entire corpus.”
+“List all Conflict/Choice sections tagged with ‘agency’.”
+“Which patterns use the Emotional Spatialization lens?”
+“Find all patterns where the question section addresses self/other boundaries.”
+2. Cross-Document Reasoning
+“Compare Pattern 3 across all documents. Identify contradictions, shared metaphors, repeated symbols.”
+“How does the ‘externalization’ motif evolve across lenses?”
+“Cluster all patterns mentioning ‘separation’ into conceptual families.”
+3. Thematic Maps
+“Using the Airtable tags and the source texts, generate a taxonomy of all transformation mechanisms.”
+“Identify latent themes across the entire corpus — not just the explicit lenses.”
+“Map relationships between lenses, patterns, and conflicts.”
+4. Deep Document Analysis
+“Find all instances where ‘anxiety’ appears as a spatialized object. Summarize how its representation shifts.”
+“Across all docs, what are the dominant conflict archetypes?”
+“Create a cross-document heatmap of emotional motifs.”
+5. Pattern Dynamics
+“How does Pattern 4 (Internal Friction) operate across Emotional Spatialization vs Temporal Compression lenses?”
+“Which patterns consistently link color → agency shifts?”
+6. Meta-Level Questions
+“What philosophical assumptions repeat across the corpus?”
+“Identify contradictions between lenses regarding autonomy and perception.”
+“Extract recurring narrative structures from all Conflict/Choice sections.”
+7. Hybrid Index + Text Queries
+These require BOTH Airtable metadata AND the Google Docs source text:
+“Using the Airtable index as the filter, show only Pattern 1 entries tagged ‘boundary dissolution,’ and analyze the underlying Google Docs for conceptual variations.”
+“From all patterns with Lens = Emotional Spatialization, extract the spatial metaphors used and categorize them.”
+This is why the index AND the docs must be perfectly aligned.
+
+B. SECOND WORKFLOW — Exploration Inside Airtable (Database-Style Filtering)
+Airtable will also be used heavily as a database.
+We will use it to:
+1. Filter patterns
+by lens
+by pattern number
+by theme
+by conflict type
+by question type
+by source document
+by tags
+2. Explore relationships
+“Show all patterns linked to this document.”
+“Show all documents that use this lens.”
+“Show all conflicts across all patterns tagged ‘agency’.”
+3. Manual insight discovery
+This is where we (humans) notice:
+repeating patterns
+anomalies
+unexpected connections
+gaps
+motifs
+And once we see something interesting in Airtable, we take that insight back to Gemini.
+Example:
+We notice in Airtable that Pattern 4 appears frequently with ‘color metaphors’.
+Then we ask Gemini:
+“Analyze all Pattern 4 entries that involve color metaphors and summarize their psychological function across the corpus.”
+This workflow requires Airtable to be:
+clean
+structured
+stable
+linked properly
+deeply aligned with the corpus ontology

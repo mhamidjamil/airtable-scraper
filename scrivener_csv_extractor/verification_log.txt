@@ -1,0 +1,4 @@
+Total Records: 569
+Records with Planning: 569
+Records with Revision: 0
+Records with Metadata: 0
