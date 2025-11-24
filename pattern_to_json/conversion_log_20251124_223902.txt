@@ -1,0 +1,180 @@
+================================================================================
+CONVERSION LOG
+================================================================================
+Timestamp: 2025-11-24T22:39:01.845966
+Total files processed: 56
+Successful: 0
+Skipped: 0
+Errors: 56
+
+================================================================================
+ERRORS
+================================================================================
+✗ AD FONTES\STEP 2\English's Imperial Poverty Enabled Surveillance Capitalism.docx
+  - Error: not enough values to unpack (expected 2, got 0)
+
+✗ AD FONTES\STEP 2\Greek's Overflow Vocabulary vs. Scarcity Capitalism.docx
+  - Error: not enough values to unpack (expected 2, got 0)
+
+✗ AD FONTES\STEP 2\Logos Spermatikos Wellgorithms as Living Seeds.docx
+  - Error: not enough values to unpack (expected 2, got 0)
+
+✗ AD FONTES\STEP 2\The Dual Movement Backward to Sources, Forward to New Vocabulary.docx
+  - Error: not enough values to unpack (expected 2, got 0)
+
+✗ AD FONTES\STEP 2\Translation as Revelation, Not Dilution.docx
+  - Error: not enough values to unpack (expected 2, got 0)
+
+✗ AI PERSONAS\STEP 2\Convivencia & Collective Bloom.docx
+  - Error: not enough values to unpack (expected 2, got 0)
+
+✗ AI PERSONAS\STEP 2\The Linguistic Stone Age & Renaissance.docx
+  - Error: not enough values to unpack (expected 2, got 0)
+
+✗ AI PERSONAS\STEP 2\Wellgorithms vs. Algorithms.docx
+  - Error: not enough values to unpack (expected 2, got 0)
+
+✗ AI PERSONAS\STEP 2\⟨inner⟩Garden — Fleshience The Human AI Distinction.docx
+  - Error: not enough values to unpack (expected 2, got 0)
+
+✗ AI PERSONAS\STEP 2\⟨inner⟩Garden — Subatomic Emotions & Emotional Physics.docx
+  - Error: not enough values to unpack (expected 2, got 0)
+
+✗ BIOME\STEP 2\BELOVED BANG.docx
+  - Error: not enough values to unpack (expected 2, got 0)
+
+✗ BIOME\STEP 2\Convivencia, Philoxenia & Emotional Hosting.docx
+  - Error: not enough values to unpack (expected 2, got 0)
+
+✗ BIOME\STEP 2\Ecological & Microbial Consciousness One Wounded Biome.docx
+  - Error: not enough values to unpack (expected 2, got 0)
+
+✗ BIOME\STEP 2\GEN G Grace, Garden & Generative Generation.docx
+  - Error: not enough values to unpack (expected 2, got 0)
+
+✗ BIOME\STEP 2\PHILOXENIA.docx
+  - Error: not enough values to unpack (expected 2, got 0)
+
+✗ BULLSHIT\STEP 2\BULLSHIT AS HUMAN BIRTHRIGHT.docx
+  - Error: not enough values to unpack (expected 2, got 0)
+
+✗ BULLSHIT\STEP 2\HOLY FOOLISHNESS LINEAGE.docx
+  - Error: not enough values to unpack (expected 2, got 0)
+
+✗ BULLSHIT\STEP 2\Outsourcing as Ontological Heresy.docx
+  - Error: not enough values to unpack (expected 2, got 0)
+
+✗ BULLSHIT\STEP 2\THE ∫ SYMBOL AS SATIRICAL SURGERY An Interpretive Report on ⟨inner⟩Garden.docx
+  - Error: not enough values to unpack (expected 2, got 0)
+
+✗ BULLSHIT\STEP 2\The Infinite Diagnosis Machine.docx
+  - Error: not enough values to unpack (expected 2, got 0)
+
+✗ BUSINESS\STEP 2\+ our story.docx
+  - Error: not enough values to unpack (expected 2, got 0)
+
+✗ BUSINESS\STEP 2\THE WILDERNESS AS CREDENTIAL.docx
+  - Error: not enough values to unpack (expected 2, got 0)
+
+✗ BUSINESS\STEP 2\THE ZEITGEIST BOMB (SUBVERSIVE INEVITABILITY).docx
+  - Error: not enough values to unpack (expected 2, got 0)
+
+✗ BUSINESS\STEP 2\The Luther Parallel Reformation Economics.docx
+  - Error: not enough values to unpack (expected 2, got 0)
+
+✗ BUSINESS\STEP 2\⟨inner⟩Garden Open-Source Consciousness vs Walled Gardens.docx
+  - Error: not enough values to unpack (expected 2, got 0)
+
+✗ DYNAMITE\STEP 2\A Lexicon of Beyond & The Grammar of Urgency.docx
+  - Error: not enough values to unpack (expected 2, got 0)
+
+✗ DYNAMITE\STEP 2\Divine Force Flows Through Emptied Vessels, Not Enhanced Ones.docx
+  - Error: not enough values to unpack (expected 2, got 0)
+
+✗ DYNAMITE\STEP 2\Every Threshold Becomes Springboard, Not Ceiling.docx
+  - Error: not enough values to unpack (expected 2, got 0)
+
+✗ DYNAMITE\STEP 2\Fellowship means sharing divine energies — bloomscrolling.docx
+  - Error: not enough values to unpack (expected 2, got 0)
+
+✗ DYNAMITE\STEP 2\Kingdom Physics Urgent, Breathless, Immediate.docx
+  - Error: not enough values to unpack (expected 2, got 0)
+
+✗ FORMULAS + WELLGOS\STEP 2\Mathematical Liturgy.docx
+  - Error: not enough values to unpack (expected 2, got 0)
+
+✗ FORMULAS + WELLGOS\STEP 2\Neologisms & Gen G Language as New Dimension of Feeling.docx
+  - Error: not enough values to unpack (expected 2, got 0)
+
+✗ FORMULAS + WELLGOS\STEP 2\Open Source Software for the Soul The GitHub Moment.docx
+  - Error: not enough values to unpack (expected 2, got 0)
+
+✗ FORMULAS + WELLGOS\STEP 2\Seeds and Weeds Share Identical Architecture.docx
+  - Error: not enough values to unpack (expected 2, got 0)
+
+✗ FORMULAS + WELLGOS\STEP 2\THE INTEGRAL AS THEOLOGICAL SYMBOL.docx
+  - Error: not enough values to unpack (expected 2, got 0)
+
+✗ PAULA\STEP 2\Fleshience Salvation Felt in Flesh and Tenderness.docx
+  - Error: not enough values to unpack (expected 2, got 0)
+
+✗ PAULA\STEP 2\Garden as Sacred Technology Wellgorithms as Formationware.docx
+  - Error: not enough values to unpack (expected 2, got 0)
+
+✗ PAULA\STEP 2\Redemption Through New Leadership The Grace Generation.docx
+  - Error: not enough values to unpack (expected 2, got 0)
+
+✗ PAULA\STEP 2\Reenchantment of Mystery The Garden's Counter-Liturgy.docx
+  - Error: not enough values to unpack (expected 2, got 0)
+
+✗ PAULA\STEP 2\Typography as Theology Design as Doxology.docx
+  - Error: not enough values to unpack (expected 2, got 0)
+
+✗ QUANTUM\STEP 2\Emotions as Subatomic Particles with Measurable Properties.docx
+  - Error: not enough values to unpack (expected 2, got 0)
+
+✗ QUANTUM\STEP 2\Inner Outer Integration Healing the 10,000-Year Separation.docx
+  - Error: not enough values to unpack (expected 2, got 0)
+
+✗ QUANTUM\STEP 2\Post-Linguistic Consciousness.docx
+  - Error: not enough values to unpack (expected 2, got 0)
+
+✗ QUANTUM\STEP 2\The Great Emotional and Linguistic Collapse.docx
+  - Error: not enough values to unpack (expected 2, got 0)
+
+✗ QUANTUM\STEP 2\The Theological Substrate.docx
+  - Error: not enough values to unpack (expected 2, got 0)
+
+✗ WARS\4.1 Language & Story Pattern.docx
+  - Error: not enough values to unpack (expected 2, got 0)
+
+✗ WARS\DECLARE WAR.docx
+  - Error: not enough values to unpack (expected 2, got 0)
+
+✗ WARS\Doom vs Bloom.docx
+  - Error: too many values to unpack (expected 2)
+
+✗ WARS\Personhood & Boundaries.docx
+  - Error: too many values to unpack (expected 2)
+
+✗ WARS\Power & Civilization.docx
+  - Error: too many values to unpack (expected 2)
+
+✗ WARS\Spiritual Architecture.docx
+  - Error: too many values to unpack (expected 2)
+
+✗ WRITINGS\STEP 2\Generativity = Divinity.docx
+  - Error: not enough values to unpack (expected 2, got 0)
+
+✗ WRITINGS\STEP 2\Interiority as Historical Invention, Not Biological Given.docx
+  - Error: not enough values to unpack (expected 2, got 0)
+
+✗ WRITINGS\STEP 2\REDEEMING TIME From Chronos to Kairos.docx
+  - Error: not enough values to unpack (expected 2, got 0)
+
+✗ WRITINGS\STEP 2\THE WILSON PARADOX & THE INTERFACE CRISIS.docx
+  - Error: not enough values to unpack (expected 2, got 0)
+
+✗ WRITINGS\STEP 2\The Garden as Ur-Metaphor and Operating System.docx
+  - Error: not enough values to unpack (expected 2, got 0)
+

@@ -140,12 +140,16 @@ def extract_summary(paragraphs):
         
         summary_lines.append(text)
     
-    # Require at least 3 lines for a valid summary
-    if len(summary_lines) >= 3:
+    # Join lines
+    summary = "\n\n".join(summary_lines)
+    
+    # Require 2+ lines OR sufficient length (approx 3 lines of text)
+    # Relaxed to > 50 chars to catch short summaries
+    if len(summary_lines) >= 2 or len(summary) > 50:
         # Replace \n literal with actual newlines
-        summary_text = "\n\n".join(summary_lines)
-        summary_text = summary_text.replace('\\n', ' ')  # Replace \n literals with space
-        return summary_text, True
+        summary = summary.replace('\\n', ' ')
+        return summary, True
+    
     return "", False
 
 def clean_text(text):
@@ -388,8 +392,11 @@ def process_file(file_path, root_dir, logger):
         
         # Count actual lines (split by double newline)
         summary_parts = [p.strip() for p in summary.split('\n\n') if p.strip()]
-        if len(summary_parts) < 3:
-            logger.log_skip(rel_path, "Summary less than 3 lines")
+        
+        # Validation: Require 3+ paragraphs OR sufficient length (approx 3 lines of text)
+        # Relaxed to > 50 chars to catch short summaries
+        if len(summary_parts) < 3 and len(summary) < 50:
+            logger.log_skip(rel_path, f"Summary too short (Parts: {len(summary_parts)}, Len: {len(summary)})")
             return None
         
         # Clean summary text
