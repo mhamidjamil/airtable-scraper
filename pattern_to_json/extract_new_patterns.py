@@ -148,6 +148,18 @@ def extract_summary(paragraphs):
         return summary_text, True
     return "", False
 
+def clean_text(text):
+    """Clean text by removing newlines and extra spaces"""
+    if not text:
+        return ""
+    # Replace literal \n with space
+    text = text.replace('\\n', ' ')
+    # Replace actual newlines with space
+    text = text.replace('\n', ' ')
+    # Remove multiple spaces
+    text = re.sub(r'\s+', ' ', text)
+    return text.strip()
+
 def extract_patterns(paragraphs):
     """Extract patterns from document paragraphs (without pattern_number)"""
     patterns = []
@@ -182,6 +194,8 @@ def extract_patterns(paragraphs):
                     break
                 
                 cleaned_text = clean_label(para_text)
+                # Apply text cleaning
+                cleaned_text = clean_text(cleaned_text)
                 
                 if section_index == 0:
                     overview = cleaned_text
@@ -209,6 +223,7 @@ def extract_variations(paragraphs):
     """Extract variations from document paragraphs"""
     variations = []
     i = 0
+    current_var_num = 0
     
     while i < len(paragraphs):
         text = paragraphs[i].text.strip()
@@ -218,6 +233,7 @@ def extract_variations(paragraphs):
         # 2. " – PATTERN 5: Title" (missing variation number)
         # 3. "Variation 6 — Title" (no PATTERN prefix)
         # 4. "0 — Title" (typo for "10")
+        # 5. "– UPPERCASE TITLE" (Implicit variation)
         
         variation_match = None
         variation_number = None
@@ -231,6 +247,7 @@ def extract_variations(paragraphs):
             pattern_ref = int(match.group(2))
             title = match.group(3).strip()
             variation_match = True
+            current_var_num = variation_number
         
         # Try format: " – PATTERN X: Title" (missing variation number)
         if not variation_match:
@@ -240,6 +257,7 @@ def extract_variations(paragraphs):
                 title = match.group(2).strip()
                 variation_number = pattern_ref  # Use pattern number as variation number
                 variation_match = True
+                current_var_num = variation_number
         
         # Try format: "Variation X — Title" or "Variation X – Title"
         if not variation_match:
@@ -249,6 +267,7 @@ def extract_variations(paragraphs):
                 title = match.group(2).strip()
                 pattern_ref = 1  # Default to pattern 1 if not specified
                 variation_match = True
+                current_var_num = variation_number
         
         # Try format: "X — Title" (just number and title, handle "0" as "10")
         if not variation_match:
@@ -262,6 +281,20 @@ def extract_variations(paragraphs):
                 title = match.group(2).strip()
                 pattern_ref = 1  # Default to pattern 1
                 variation_match = True
+                current_var_num = variation_number
+
+        # Try format: "– UPPERCASE TITLE" (Implicit variation)
+        # Must start with dash, followed by uppercase letters and spaces
+        if not variation_match:
+            match = re.match(r'^\s*[–—-]\s*([A-Z\s]+)$', text)
+            if match:
+                title = match.group(1).strip()
+                # Ensure it's not just a dash or empty
+                if len(title) > 3: # Arbitrary min length to avoid noise
+                    current_var_num += 1
+                    variation_number = current_var_num
+                    pattern_ref = 1
+                    variation_match = True
         
         if variation_match:
             # Get next non-empty paragraph as content
@@ -276,11 +309,15 @@ def extract_variations(paragraphs):
                     continue
                 
                 # Stop if we hit another pattern or variation
-                if re.match(r'^(Pattern|Variation|VARIATION|\d+\s*[–—-])\s', para_text, re.IGNORECASE):
+                # Updated stop condition to include the new implicit format
+                if re.match(r'^(Pattern|Variation|VARIATION|\d+\s*[–—-])\s', para_text, re.IGNORECASE) or re.match(r'^\s*[–—-]\s*[A-Z\s]+$', para_text):
                     break
                 
                 content = para_text
                 break
+            
+            # Clean content
+            content = clean_text(content)
             
             variations.append({
                 "variation_number": variation_number,
@@ -354,6 +391,9 @@ def process_file(file_path, root_dir, logger):
         if len(summary_parts) < 3:
             logger.log_skip(rel_path, "Summary less than 3 lines")
             return None
+        
+        # Clean summary text
+        summary = clean_text(summary)
         
         # Build structure
         patterns_with_variations = build_json_structure(patterns, variations)
