@@ -1,0 +1,90 @@
+================================================================================
+CONVERSION LOG
+================================================================================
+Timestamp: 2025-11-24T18:49:15.873847
+Total files processed: 21
+Successful: 12
+Skipped: 9
+Errors: 0
+
+================================================================================
+SUCCESSFULLY PROCESSED
+================================================================================
+✓ AD FONTES\STEP 2\The Dual Movement Backward to Sources, Forward to New Vocabulary.docx
+  - Patterns: 10, Variations: 0
+  - Summary: Yes
+
+✓ BIOME\STEP 2\BELOVED BANG.docx
+  - Patterns: 10, Variations: 0
+  - Summary: Yes
+
+✓ BIOME\STEP 2\Convivencia, Philoxenia & Emotional Hosting.docx
+  - Patterns: 10, Variations: 0
+  - Summary: Yes
+
+✓ BIOME\STEP 2\Ecological & Microbial Consciousness One Wounded Biome.docx
+  - Patterns: 10, Variations: 0
+  - Summary: Yes
+
+✓ BIOME\STEP 2\GEN G Grace, Garden & Generative Generation.docx
+  - Patterns: 10, Variations: 0
+  - Summary: Yes
+
+✓ BIOME\STEP 2\PHILOXENIA.docx
+  - Patterns: 10, Variations: 0
+  - Summary: Yes
+
+✓ QUANTUM\STEP 2\Emotions as Subatomic Particles with Measurable Properties.docx
+  - Patterns: 10, Variations: 0
+  - Summary: Yes
+
+✓ QUANTUM\STEP 2\Inner Outer Integration Healing the 10,000-Year Separation.docx
+  - Patterns: 10, Variations: 0
+  - Summary: Yes
+
+✓ QUANTUM\STEP 2\Post-Linguistic Consciousness.docx
+  - Patterns: 10, Variations: 0
+  - Summary: Yes
+
+✓ QUANTUM\STEP 2\The Great Emotional and Linguistic Collapse.docx
+  - Patterns: 10, Variations: 0
+  - Summary: Yes
+
+✓ QUANTUM\STEP 2\The Theological Substrate.docx
+  - Patterns: 10, Variations: 0
+  - Summary: Yes
+
+✓ WARS\4.1 Language & Story Pattern.docx
+  - Patterns: 10, Variations: 0
+  - Summary: Yes
+
+================================================================================
+SKIPPED
+================================================================================
+⊘ AD FONTES\STEP 2\English's Imperial Poverty Enabled Surveillance Capitalism.docx
+  - Reason: Summary less than 2 lines
+
+⊘ AD FONTES\STEP 2\Greek's Overflow Vocabulary vs. Scarcity Capitalism.docx
+  - Reason: Summary less than 2 lines
+
+⊘ AD FONTES\STEP 2\Logos Spermatikos Wellgorithms as Living Seeds.docx
+  - Reason: Summary less than 2 lines
+
+⊘ AD FONTES\STEP 2\Translation as Revelation, Not Dilution.docx
+  - Reason: Summary less than 2 lines
+
+⊘ WARS\DECLARE WAR.docx
+  - Reason: No patterns found
+
+⊘ WARS\Doom vs Bloom.docx
+  - Reason: Summary less than 2 lines
+
+⊘ WARS\Personhood & Boundaries.docx
+  - Reason: Summary less than 2 lines
+
+⊘ WARS\Power & Civilization.docx
+  - Reason: Summary less than 2 lines
+
+⊘ WARS\Spiritual Architecture.docx
+  - Reason: Summary less than 2 lines
+

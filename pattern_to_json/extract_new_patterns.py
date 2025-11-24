@@ -4,6 +4,7 @@ import re
 import docx
 from datetime import datetime
 from pathlib import Path
+from collections import defaultdict
 
 # Configuration
 ROOT_DIR = r"E:\Work\shoaib\upwork\new_extractions"
@@ -66,7 +67,7 @@ class ConversionLogger:
             # Skipped files
             if self.skipped:
                 f.write("=" * 80 + "\n")
-                f.write("SKIPPED (No Patterns)\n")
+                f.write("SKIPPED\n")
                 f.write("=" * 80 + "\n")
                 for item in self.skipped:
                     f.write(f"⊘ {item['file']}\n")
@@ -108,9 +109,11 @@ def clean_label(text):
 def extract_summary(paragraphs):
     """
     Extract summary - text before Task 1 or first Pattern.
+    Excludes first line (title) and requires minimum 2 lines.
     Returns (summary_text, has_summary)
     """
     summary_lines = []
+    first_line_skipped = False
     
     for para in paragraphs:
         text = para.text.strip()
@@ -130,9 +133,15 @@ def extract_summary(paragraphs):
         if re.match(r'^[_\-=]{3,}$', text):
             continue
         
+        # Skip the first meaningful line (title)
+        if not first_line_skipped:
+            first_line_skipped = True
+            continue
+        
         summary_lines.append(text)
     
-    if summary_lines:
+    # Require at least 2 lines for a valid summary
+    if len(summary_lines) >= 2:
         return "\n\n".join(summary_lines), True
     return "", False
 
@@ -280,7 +289,7 @@ def process_file(file_path, root_dir, logger):
         doc = docx.Document(file_path)
         paragraphs = doc.paragraphs
         
-        # Extract summary
+        # Extract summary (now excludes title and requires 2+ lines)
         summary, has_summary = extract_summary(paragraphs)
         
         # Extract patterns and variations
@@ -290,6 +299,11 @@ def process_file(file_path, root_dir, logger):
         # Skip if no patterns
         if len(patterns) == 0:
             logger.log_skip(rel_path, "No patterns found")
+            return None
+        
+        # Skip if summary is less than 2 lines
+        if not has_summary or len(summary.split('\n')) < 2:
+            logger.log_skip(rel_path, "Summary less than 2 lines")
             return None
         
         # Build structure
@@ -316,15 +330,44 @@ def process_file(file_path, root_dir, logger):
         logger.log_error(rel_path, str(e))
         return None
 
-def find_all_docx_files(root_dir):
-    """Recursively find all .docx files"""
-    files = []
-    for root, dirs, filenames in os.walk(root_dir):
-        for filename in filenames:
-            if filename.endswith('.docx') and not filename.startswith('~$'):
-                full_path = os.path.join(root, filename)
-                files.append(full_path)
-    return sorted(files)
+def get_target_files(root_dir):
+    """
+    Smart folder prioritization:
+    1. For each parent folder (e.g., BIOME), check if STEP 2 folder exists
+    2. If yes, only process files in STEP 2
+    3. If no, process files in the root of parent folder
+    4. Skip STEP 1, METAS, and other non-target folders
+    """
+    target_files = []
+    
+    # Get all top-level directories
+    for item in os.listdir(root_dir):
+        parent_path = os.path.join(root_dir, item)
+        
+        if not os.path.isdir(parent_path):
+            continue
+        
+        # Look for STEP 2 folder (case-insensitive)
+        step2_found = False
+        for subdir in os.listdir(parent_path):
+            if subdir.lower() == "step 2":
+                step2_path = os.path.join(parent_path, subdir)
+                if os.path.isdir(step2_path):
+                    # Process files in STEP 2
+                    for filename in os.listdir(step2_path):
+                        if filename.endswith('.docx') and not filename.startswith('~$'):
+                            target_files.append(os.path.join(step2_path, filename))
+                    step2_found = True
+                    break
+        
+        # If no STEP 2 folder, process files in parent root
+        if not step2_found:
+            for filename in os.listdir(parent_path):
+                filepath = os.path.join(parent_path, filename)
+                if os.path.isfile(filepath) and filename.endswith('.docx') and not filename.startswith('~$'):
+                    target_files.append(filepath)
+    
+    return sorted(target_files)
 
 def main():
     print("=" * 80)
@@ -333,11 +376,11 @@ def main():
     print()
     
     logger = ConversionLogger()
-    all_documents = []
+    documents_by_category = defaultdict(list)
     
-    # Find all docx files
-    all_files = find_all_docx_files(ROOT_DIR)
-    print(f"Found {len(all_files)} docx files")
+    # Find target files with smart prioritization
+    all_files = get_target_files(ROOT_DIR)
+    print(f"Found {len(all_files)} target docx files")
     print()
     
     # Process each file
@@ -347,13 +390,14 @@ def main():
         
         doc_data = process_file(file_path, ROOT_DIR, logger)
         if doc_data:
-            all_documents.append(doc_data)
+            category = doc_data.pop("category")
+            documents_by_category[category].append(doc_data)
     
-    # Build final output
+    # Build final output with category grouping
     output_data = {
-        "total_documents": len(all_documents),
+        "total_documents": sum(len(docs) for docs in documents_by_category.values()),
         "extraction_timestamp": datetime.now().isoformat(),
-        "documents": all_documents
+        "documents": dict(documents_by_category)  # Convert defaultdict to regular dict
     }
     
     # Write JSON
@@ -361,7 +405,8 @@ def main():
     print("=" * 80)
     print("WRITING OUTPUT")
     print("=" * 80)
-    print(f"Total documents: {len(all_documents)}")
+    print(f"Total categories: {len(documents_by_category)}")
+    print(f"Total documents: {output_data['total_documents']}")
     print(f"Output file: {OUTPUT_FILE}")
     
     with open(OUTPUT_FILE, 'w', encoding='utf-8') as f:
@@ -379,7 +424,7 @@ def main():
     print("SUMMARY")
     print("=" * 80)
     print(f"Successfully processed: {len(logger.successful)}")
-    print(f"Skipped (no patterns): {len(logger.skipped)}")
+    print(f"Skipped: {len(logger.skipped)}")
     print(f"Errors: {len(logger.errors)}")
     print()
     print("Done!")
