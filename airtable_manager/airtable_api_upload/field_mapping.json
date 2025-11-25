@@ -1,0 +1,96 @@
+{
+  "Patterns": {
+    "pattern_title": {
+      "id": "fldwns64Z1sA8f35w",
+      "type": "singleLineText"
+    },
+    "base_folder": {
+      "id": "fldykH9YKIUk23goj",
+      "type": "singleLineText"
+    },
+    "lens": {
+      "id": "fldPLBkCc7LAKYOAU",
+      "type": "multipleRecordLinks"
+    },
+    "sources": {
+      "id": "fldWvQGjw2LxSOKKc",
+      "type": "multipleRecordLinks"
+    },
+    "overview": {
+      "id": "fld6UXNB61nieFQRr",
+      "type": "multilineText"
+    },
+    "choice": {
+      "id": "fld6gSnegbF6nI2cn",
+      "type": "multilineText"
+    },
+    "variations": {
+      "id": "fldMB9w9XRWnzLlm3",
+      "type": "multipleRecordLinks"
+    },
+    "Metas": {
+      "id": "fldue02qYseLQ3Blq",
+      "type": "multipleRecordLinks"
+    }
+  },
+  "Lenses": {
+    "lens_name": {
+      "id": "fldpylKFYPRbACaNr",
+      "type": "singleLineText"
+    },
+    "content": {
+      "id": "fldjpqtjmoCjC0RQM",
+      "type": "multilineText"
+    },
+    "Patterns": {
+      "id": "fldSgqziExewT3qBl",
+      "type": "multipleRecordLinks"
+    }
+  },
+  "Sources": {
+    "source_name": {
+      "id": "fldNblswO88mtoXZV",
+      "type": "singleLineText"
+    },
+    "Patterns": {
+      "id": "fld8WsblHNP5DWPPQ",
+      "type": "multipleRecordLinks"
+    }
+  },
+  "Variations": {
+    "variation_title": {
+      "id": "fldGl8508sxyME08K",
+      "type": "singleLineText"
+    },
+    "content": {
+      "id": "fldsKBY4PKtio82z4",
+      "type": "multilineText"
+    },
+    "pattern_reference": {
+      "id": "fldz7YITnCEi44Hi0",
+      "type": "multipleRecordLinks"
+    }
+  },
+  "Metas": {
+    "title": {
+      "id": "fldomyaMGHza2iEmO",
+      "type": "singleLineText"
+    },
+    "subtitle": {
+      "id": "fldm913fmoVoxZ6uD",
+      "type": "singleLineText"
+    },
+    "content": {
+      "id": "fldWF5U9KodCQquYA",
+      "type": "multilineText"
+    },
+    "linked_patterns": {
+      "id": "fldSZTc6JUMsuXN8p",
+      "type": "multipleRecordLinks"
+    },
+    "base_folder": {
+      "id": "fldTEXAtOwIi67QhG",
+      "type": "singleSelect"
+    }
+  }
+}

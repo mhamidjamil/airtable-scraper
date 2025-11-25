@@ -94,14 +94,11 @@ class AirtableUploader:
         lens_names = []
         
         for lens in lenses_data:
-            # Convert patterns list to comma-separated string
-            patterns_str = ", ".join(lens.get("patterns", []))
-            
             records.append({
                 "fields": {
                     "lens_name": lens["lens_name"],
-                    "content": lens.get("content", ""),
-                    "patterns": patterns_str  # Text field, not link
+                    "content": lens.get("content", "")
+                    # Note: Patterns field is auto-created reverse link
                 }
             })
             lens_names.append(lens["lens_name"])
@@ -129,12 +126,10 @@ class AirtableUploader:
         source_names = []
         
         for source in sources_data:
-            patterns_str = ", ".join(source.get("patterns", []))
-            
             records.append({
                 "fields": {
-                    "source_name": source["source_name"],
-                    "patterns": patterns_str  # Text field
+                    "source_name": source["source_name"]
+                    # Note: Patterns field is auto-created reverse link
                 }
             })
             source_names.append(source["source_name"])
@@ -162,21 +157,19 @@ class AirtableUploader:
         meta_titles = []
         
         for meta in metas_data:
-            patterns_str = ", ".join(meta.get("patterns", []))
-            
             records.append({
                 "fields": {
                     "title": meta["title"],
                     "subtitle": meta.get("subtitle", ""),
                     "content": meta.get("content", ""),
-                    "base_folder": meta.get("base_folder", ""),
-                    "patterns": patterns_str  # Text field
+                    "base_folder": meta.get("base_folder", "")
+                    # Note: linked_patterns will be filled from Patterns side
                 }
             })
             meta_titles.append(meta["title"])
         
         self.log(f"Uploading {len(records)} METAS...")
-        ids = self.batch_upload("METAS", records)
+        ids = self.batch_upload("Metas", records)  # Note: table name is "Metas" not "METAS"
         
         # Create mapping
         for title, airtable_id in zip(meta_titles, ids):
@@ -205,9 +198,9 @@ class AirtableUploader:
             records.append({
                 "fields": {
                     "variation_title": var["variation_title"],
-                    "variation_number": var.get("variation_number", 0),
                     "content": var.get("content", "")
-                    # Note: linked_pattern will be added from Patterns side
+                    # Note: pattern_reference will be added from Patterns side
+                    # variation_number field doesn't exist in your Airtable
                 }
             })
             temp_ids.append(temp_id)
@@ -246,14 +239,13 @@ class AirtableUploader:
             variation_temp_ids = pattern.get("variation_temp_ids", [])
             variation_ids = [self.variation_id_map.get(v) for v in variation_temp_ids if v in self.variation_id_map]
             
-            # Build fields
+            # Build fields (only fields that exist in Airtable)
             fields = {
-                "pattern_id": pattern.get("pattern_id", ""),
                 "pattern_title": pattern["pattern_title"],
                 "overview": pattern.get("overview", ""),
                 "choice": pattern.get("choice", ""),
-                "base_folder": pattern.get("base_folder", ""),
-                "drive_doc_url": pattern.get("drive_doc_url", "")
+                "base_folder": pattern.get("base_folder", "")
+                # Note: pattern_id and drive_doc_url don't exist in your Airtable
             }
             
             # Add links (only if IDs exist)
@@ -264,12 +256,20 @@ class AirtableUploader:
             if variation_ids:
                 fields["variations"] = variation_ids
             
+            # Link to all METAS from same base_folder (optional - can enable if needed)
+            # base_folder = pattern.get("base_folder", "")
+            # meta_ids = [mid for title, mid in self.meta_id_map.items() 
+            #            if base_folder in title]  # Basic matching
+            # if meta_ids:
+            #     fields["Metas"] = meta_ids  # Note: field name is "Metas" not "metas"
+            
             records.append({"fields": fields})
         
         self.log(f"Uploading {len(records)} patterns...")
         ids = self.batch_upload("Patterns", records)
         
         self.log(f"✓ {len(ids)} patterns uploaded\n")
+
     
     def save_id_mappings(self):
         """Save ID mappings to JSON files for audit"""
