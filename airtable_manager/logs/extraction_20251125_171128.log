@@ -1,0 +1,48 @@
+================================================================================
+PATTERN EXTRACTION LOG
+================================================================================
+Timestamp: 2025-11-25T17:11:28.431828
+Duration: 0:00:00.140077
+
+================================================================================
+SUMMARY STATISTICS
+================================================================================
+Total files processed: 5
+✓ Successful: 5
+⊘ Skipped: 0
+✗ Errors: 0
+⚠ Warnings: 5
+
+Data Extracted:
+  - Total Patterns: 50
+  - Total Variations: 46
+  - Files with Summary: 5
+
+================================================================================
+SUCCESSFULLY PROCESSED FILES
+================================================================================
+✓ ..\new_extractions\BIOME\STEP 2\BELOVED BANG.docx
+  Patterns: 10, Variations: 10, Summary: Yes
+✓ ..\new_extractions\BIOME\STEP 2\Convivencia, Philoxenia & Emotional Hosting.docx
+  Patterns: 10, Variations: 10, Summary: Yes
+✓ ..\new_extractions\BIOME\STEP 2\Ecological & Microbial Consciousness One Wounded Biome.docx
+  Patterns: 10, Variations: 8, Summary: Yes
+✓ ..\new_extractions\BIOME\STEP 2\GEN G Grace, Garden & Generative Generation.docx
+  Patterns: 10, Variations: 8, Summary: Yes
+✓ ..\new_extractions\BIOME\STEP 2\PHILOXENIA.docx
+  Patterns: 10, Variations: 10, Summary: Yes
+
+================================================================================
+QUALITY WARNINGS
+================================================================================
+⚠ ..\new_extractions\BIOME\STEP 2\BELOVED BANG.docx
+  9 patterns have no variations
+⚠ ..\new_extractions\BIOME\STEP 2\Convivencia, Philoxenia & Emotional Hosting.docx
+  9 patterns have no variations
+⚠ ..\new_extractions\BIOME\STEP 2\Ecological & Microbial Consciousness One Wounded Biome.docx
+  9 patterns have no variations
+⚠ ..\new_extractions\BIOME\STEP 2\GEN G Grace, Garden & Generative Generation.docx
+  9 patterns have no variations
+⚠ ..\new_extractions\BIOME\STEP 2\PHILOXENIA.docx
+  9 patterns have no variations
+
