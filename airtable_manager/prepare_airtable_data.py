@@ -39,46 +39,76 @@ def extract_unique_lenses(data: dict) -> list:
     """
     Extract unique lenses from pattern documents
     
-    Returns: List of dicts with lens_name and content (summary)
+    Returns: List of dicts with lens_name, content (summary), and patterns (list of pattern titles)
     """
-    lenses = {}
+    lens_to_data = {}
     
     for doc in data.get("documents", []):
         lens_name = doc.get("lens", "")
         summary = doc.get("summary", "")
         
-        if lens_name and lens_name not in lenses:
-            lenses[lens_name] = {
-                "lens_name": lens_name,
-                "content": summary  # Use document summary as lens content
-            }
+        if lens_name:
+            if lens_name not in lens_to_data:
+                lens_to_data[lens_name] = {
+                    "lens_name": lens_name,
+                    "content": summary,
+                    "patterns": []
+                }
+            
+            # Add all patterns from this document
+            for pattern in doc.get("patterns", []):
+                pattern_title = pattern.get("title", "").strip()
+                if pattern_title:
+                    lens_to_data[lens_name]["patterns"].append(pattern_title)
     
-    return list(lenses.values())
+    # Convert patterns list to comma-separated string
+    lenses = []
+    for lens_data in lens_to_data.values():
+        lenses.append({
+            "lens_name": lens_data["lens_name"],
+            "content": lens_data["content"],
+            "patterns": ", ".join(lens_data["patterns"])  # Comma-separated list
+        })
+    
+    return lenses
 
 
 def extract_unique_sources(data: dict) -> list:
     """
     Extract unique sources from all patterns
     
-    Returns: List of dicts with source_name
+    Returns: List of dicts with source_name and patterns (list of pattern titles)
     """
-    sources = set()
+    source_to_patterns = {}
     
     for doc in data.get("documents", []):
         for pattern in doc.get("patterns", []):
             source = pattern.get("source", "").strip()
+            pattern_title = pattern.get("title", "").strip()
+            
             if source:
-                sources.add(source)
+                if source not in source_to_patterns:
+                    source_to_patterns[source] = []
+                if pattern_title:
+                    source_to_patterns[source].append(pattern_title)
     
-    return [{"source_name": s} for s in sorted(sources)]
+    # Convert to list format
+    sources = []
+    for source_name in sorted(source_to_patterns.keys()):
+        sources.append({
+            "source_name": source_name,
+            "patterns": ", ".join(source_to_patterns[source_name])  # Comma-separated list
+        })
+    
+    return sources
 
 
 def prepare_metas(data: dict) -> list:
     """
     Prepare METAS for CSV export
     
-    Schema: title, subtitle, content, base_folder
-    linked_patterns: Will be added in Airtable UI
+    Schema: title, subtitle, content, base_folder, linked_patterns
+    linked_patterns: Empty for now - will be linked manually in Airtable UI
     
     Returns: List of METAS dicts
     """
@@ -89,7 +119,8 @@ def prepare_metas(data: dict) -> list:
             "title": meta.get("title", ""),
             "subtitle": meta.get("subtitle", ""),
             "content": meta.get("content", ""),
-            "base_folder": meta.get("base_folder", "")
+            "base_folder": meta.get("base_folder", ""),
+            "linked_patterns": ""  # Empty - to be linked in Airtable UI
         })
     
     return metas
@@ -99,8 +130,8 @@ def prepare_patterns(data: dict) -> list:
     """
     Prepare patterns for CSV export
     
-    Schema: pattern_title, base_folder, lens, sources, overview, choice, drive_doc_url
-    variations: Will be linked in Airtable automatically
+    Schema: pattern_id, pattern_title, base_folder, lens, sources, overview, choice, drive_doc_url
+    variations: Will be linked in Airtable automatically via Variations table
     
     Returns: List of pattern dicts
     """
@@ -120,8 +151,7 @@ def prepare_patterns(data: dict) -> list:
                 "sources": pattern.get("source", ""),  # Keep as single value for now
                 "overview": pattern.get("overview", ""),
                 "choice": pattern.get("choice", ""),
-                "drive_doc_url": "",  # Empty for now
-                "_variation_count": len(pattern.get("variations", []))  # Info only
+                "drive_doc_url": ""  # Empty for now
             })
             pattern_id += 1
     
@@ -179,36 +209,56 @@ Import CSV files in this exact order to maintain relationships:
 ### **1. Import Lenses Table**
 - File: `lenses.csv`
 - Records: {lenses_count}
-- Fields: lens_name, content
+- Fields: 
+  - `lens_name` - Name of the lens
+  - `content` - Lens description/summary
+  - `patterns` - **Comma-separated list** of patterns using this lens (informational)
 - **No dependencies**
 
 ### **2. Import Sources Table**
 - File: `sources.csv`
 - Records: {sources_count}
-- Fields: source_name
+- Fields: 
+  - `source_name` - Name of the source
+  - `patterns` - **Comma-separated list** of patterns using this source (informational)
 - **No dependencies**
 
 ### **3. Import METAS Table**
 - File: `metas.csv`
 - Records: {metas_count}
-- Fields: title, subtitle, content, base_folder
-- **Note:** linked_patterns field will be linked manually after Patterns are imported
+- Fields:
+  - `title` - META title
+  - `subtitle` - META subtitle
+  - `content` - META full content
+  - `base_folder` - Organizing folder (BIOME, BULLSHIT, etc.)
+  - `linked_patterns` - **Empty for now** - Link manually after Patterns import
 
 ### **4. Import Patterns Table**
 - File: `patterns.csv`
 - Records: {patterns_count}
-- Fields: pattern_title, base_folder, lens, sources, overview, choice, drive_doc_url
+- Fields:
+  - `pattern_id` - Unique pattern ID (P001, P002, etc.)
+  - `pattern_title` - Title of the pattern
+  - `base_folder` - Organizing folder
+  - `lens` - Links to Lenses table (match by lens_name)
+  - `sources` - Links to Sources table (match by source_name)
+  - `overview` - Pattern overview/explanation
+  - `choice` - The choice/conflict text
+  - `drive_doc_url` - Google Drive URL (empty for now)
 - **Link these fields during import:**
-  - `lens` → Links to Lenses table (match by lens_name)
-  - `sources` → Links to Sources table (match by source_name)
-  - `_variation_count` is INFO ONLY (don't import this field)
+  - `lens` → Links to Lenses table (single link)
+  - `sources` → Links to Sources table (single link for now)
 
 ### **5. Import Variations Table**
 - File: `variations.csv`
 - Records: {variations_count}
-- Fields: variation_number, variation_title, content, linked_pattern
+- Fields:
+  - `variation_number` - Variation number (6-10 typically)
+  - `variation_title` - Title of the variation
+  - `content` - Variation content
+  - `linked_pattern` - Links to Patterns table (match by pattern_title)
 - **Link this field during import:**
-  - `linked_pattern` → Links to Patterns table (match by pattern_title)
+  - `linked_pattern` → Links to Patterns table (single link)
 
 ---
 
@@ -223,6 +273,7 @@ Import CSV files in this exact order to maintain relationships:
 4. **Configure Field Types:**
    - Text fields: Use "Single line text" or "Long text" as appropriate
    - Link fields: Choose "Link to another record" and select target table
+   - The "patterns" field in Lenses and Sources is informational (use Long text)
 
 5. **Match Fields:**
    - Airtable will try to auto-match column names
@@ -236,15 +287,20 @@ Import CSV files in this exact order to maintain relationships:
 
 ### **Link METAS to Patterns:**
 - Go to METAS table
-- Click on a META record
+- Click on a META record  
 - In `linked_patterns` field, search for patterns that belong to this META
 - ⚠️ **MANUAL STEP:** Client must clarify which patterns belong to which METAS
+
+### **Note on Pattern Lists:**
+- Lenses and Sources CSV files include a "patterns" field
+- This is **informational only** - shows which patterns use each lens/source
+- Not a link field - just comma-separated text for reference
 
 ### **Verify Relationships:**
 - Check that Patterns show linked Lens
 - Check that Patterns show linked Sources
 - Check that Variations show linked Pattern
-- Check that variation counts match expectations
+- Check that pattern IDs are unique (P001-P{patterns_count:03d})
 
 ---
 
@@ -266,6 +322,7 @@ Import CSV files in this exact order to maintain relationships:
 1. **METAS → Patterns mapping:** Currently unmapped (client input needed)
 2. **drive_doc_url:** Empty (can be populated later if Google Docs are generated)
 3. **Patterns without variations:** Some patterns may have no variations (this is normal)
+4. **Pattern lists in Lenses/Sources:** Informational only, not link fields
 
 ---
 
@@ -319,26 +376,26 @@ def main():
     write_csv(
         os.path.join(OUTPUT_DIR, "lenses.csv"),
         lenses,
-        ["lens_name", "content"]
+        ["lens_name", "content", "patterns"]
     )
     
     write_csv(
         os.path.join(OUTPUT_DIR, "sources.csv"),
         sources,
-        ["source_name"]
+        ["source_name", "patterns"]
     )
     
     write_csv(
         os.path.join(OUTPUT_DIR, "metas.csv"),
         metas,
-        ["title", "subtitle", "content", "base_folder"]
+        ["title", "subtitle", "content", "base_folder", "linked_patterns"]
     )
     
     write_csv(
         os.path.join(OUTPUT_DIR, "patterns.csv"),
         patterns,
         ["pattern_id", "pattern_title", "base_folder", "lens", "sources", 
-         "overview", "choice", "drive_doc_url", "_variation_count"]
+         "overview", "choice", "drive_doc_url"]
     )
     
     write_csv(
