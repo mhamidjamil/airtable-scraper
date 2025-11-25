@@ -1,0 +1,66 @@
+[2025-11-25 21:15:36] Starting Airtable upload...
+[2025-11-25 21:15:36] 
+================================================================================
+[2025-11-25 21:15:36] UPLOADING LENSES
+[2025-11-25 21:15:36] ================================================================================
+[2025-11-25 21:15:36] Uploading 5 lenses...
+[2025-11-25 21:15:37]   ✗ Batch 1 failed: 422
+[2025-11-25 21:15:37]     Error: {"error":{"type":"UNKNOWN_FIELD_NAME","message":"Unknown field name: \"patterns\""}}
+[2025-11-25 21:15:38] ✓ 0 lenses uploaded
+
+[2025-11-25 21:15:38] 
+================================================================================
+[2025-11-25 21:15:38] UPLOADING SOURCES
+[2025-11-25 21:15:38] ================================================================================
+[2025-11-25 21:15:38] Uploading 50 sources...
+[2025-11-25 21:15:39]   ✗ Batch 1 failed: 422
+[2025-11-25 21:15:39]     Error: {"error":{"type":"UNKNOWN_FIELD_NAME","message":"Unknown field name: \"patterns\""}}
+[2025-11-25 21:15:40]   ✗ Batch 2 failed: 422
+[2025-11-25 21:15:40]     Error: {"error":{"type":"UNKNOWN_FIELD_NAME","message":"Unknown field name: \"patterns\""}}
+[2025-11-25 21:15:41]   ✗ Batch 3 failed: 422
+[2025-11-25 21:15:41]     Error: {"error":{"type":"UNKNOWN_FIELD_NAME","message":"Unknown field name: \"patterns\""}}
+[2025-11-25 21:15:43]   ✗ Batch 4 failed: 422
+[2025-11-25 21:15:43]     Error: {"error":{"type":"UNKNOWN_FIELD_NAME","message":"Unknown field name: \"patterns\""}}
+[2025-11-25 21:15:44]   ✗ Batch 5 failed: 422
+[2025-11-25 21:15:44]     Error: {"error":{"type":"UNKNOWN_FIELD_NAME","message":"Unknown field name: \"patterns\""}}
+[2025-11-25 21:15:44] ✓ 0 sources uploaded
+
+[2025-11-25 21:15:44] 
+================================================================================
+[2025-11-25 21:15:44] UPLOADING METAS
+[2025-11-25 21:15:44] ================================================================================
+[2025-11-25 21:15:44] Uploading 5 METAS...
+[2025-11-25 21:15:46]   ✗ Batch 1 failed: 422
+[2025-11-25 21:15:46]     Error: {"error":{"type":"UNKNOWN_FIELD_NAME","message":"Unknown field name: \"patterns\""}}
+[2025-11-25 21:15:46] ✓ 0 METAS uploaded
+
+[2025-11-25 21:15:46] 
+================================================================================
+[2025-11-25 21:15:46] UPLOADING VARIATIONS
+[2025-11-25 21:15:46] ================================================================================
+[2025-11-25 21:15:46] Uploading 46 variations...
+[2025-11-25 21:15:47]   ✗ Batch 1 failed: 422
+[2025-11-25 21:15:47]     Error: {"error":{"type":"UNKNOWN_FIELD_NAME","message":"Unknown field name: \"variation_number\""}}
+[2025-11-25 21:15:48]   ✗ Batch 2 failed: 422
+[2025-11-25 21:15:48]     Error: {"error":{"type":"UNKNOWN_FIELD_NAME","message":"Unknown field name: \"variation_number\""}}
+[2025-11-25 21:15:49]   ✗ Batch 3 failed: 422
+[2025-11-25 21:15:49]     Error: {"error":{"type":"UNKNOWN_FIELD_NAME","message":"Unknown field name: \"variation_number\""}}
+[2025-11-25 21:15:51]   ✗ Batch 4 failed: 422
+[2025-11-25 21:15:51]     Error: {"error":{"type":"UNKNOWN_FIELD_NAME","message":"Unknown field name: \"variation_number\""}}
+[2025-11-25 21:15:52]   ✗ Batch 5 failed: 422
+[2025-11-25 21:15:52]     Error: {"error":{"type":"UNKNOWN_FIELD_NAME","message":"Unknown field name: \"variation_number\""}}
+[2025-11-25 21:15:52] ✓ 0 variations uploaded
+
+[2025-11-25 21:15:52] 
+================================================================================
+[2025-11-25 21:15:52] UPLOADING PATTERNS
+[2025-11-25 21:15:52] ================================================================================
+[2025-11-25 21:15:52] Uploading 50 patterns...
+[2025-11-25 21:15:53]   ✗ Batch 1 failed: 422
+[2025-11-25 21:15:53]     Error: {"error":{"type":"UNKNOWN_FIELD_NAME","message":"Unknown field name: \"pattern_id\""}}
+[2025-11-25 21:15:54]   ✗ Batch 2 failed: 422
+[2025-11-25 21:15:54]     Error: {"error":{"type":"UNKNOWN_FIELD_NAME","message":"Unknown field name: \"pattern_id\""}}
+[2025-11-25 21:15:56]   ✗ Batch 3 failed: 422
+[2025-11-25 21:15:56]     Error: {"error":{"type":"UNKNOWN_FIELD_NAME","message":"Unknown field name: \"pattern_id\""}}
+[2025-11-25 21:15:57]   ✗ Batch 4 failed: 422
+[2025-11-25 21:15:57]     Error: {"error":{"type":"UNKNOWN_FIELD_NAME","message":"Unknown field name: \"pattern_id\""}}
