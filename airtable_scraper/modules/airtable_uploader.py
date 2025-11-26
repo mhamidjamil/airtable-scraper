@@ -232,7 +232,7 @@ class AirtableUploader:
             pattern_id_counter = 1
             
             for doc in data.get("documents", []):
-                lens_id = self.record_map["lenses"].get(self.normalize_for_matching(doc.get("lens")))
+                lens_name = doc.get("lens")  # Get lens name as string
                 base_folder = doc.get("base_folder")
                 
                 for p in doc.get("patterns", []):
@@ -274,8 +274,14 @@ class AirtableUploader:
                             if v_title:  # Only sync variations with titles
                                 v_fields = {
                                     "variation_title": v_title,
-                                    "content": v.get("content", "")
+                                    "content": v.get("content", ""),
+                                    "base_folder": base_folder
                                 }
+                                
+                                # Add lens field if lens_name is available
+                                if lens_name:
+                                    v_fields["lens"] = lens_name
+                                
                                 result = self._create_or_update("variations", v_title, v_fields)
                                 if result:
                                     variations_synced += 1
