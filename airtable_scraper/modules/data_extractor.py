@@ -6,10 +6,14 @@ from datetime import datetime
 from pathlib import Path
 from typing import List, Dict, Tuple, Optional
 from config import settings
+from extraction_rules import VariationExtractor, SourceExtractor
 
 class DataExtractor:
     def __init__(self, log_handler=None):
         self.logger = log_handler
+        # Initialize extraction rule engines
+        self.variation_extractor = VariationExtractor()
+        self.source_extractor = SourceExtractor()
         
     def log(self, msg, level="info"):
         if self.logger:
@@ -23,72 +27,16 @@ class DataExtractor:
             print(f"[{level.upper()}] {msg}")
 
     def clean_text(self, text: str) -> str:
-        if not text: return ""
-        text = text.replace('\\n', ' ').replace('\n', ' ')
-        return re.sub(r'\s+', ' ', text).strip()
+        """Clean text using extraction rules"""
+        return self.variation_extractor.clean_text(text)
 
     def clean_label(self, text: str) -> str:
-        if not text: return ""
-        labels = ["Explanation:", "Inner war / choice:", "Sources:", "Explanation :", "Inner war / choice :", "Sources :"]
-        cleaned = text.strip()
-        for label in labels:
-            if cleaned.lower().startswith(label.lower()):
-                cleaned = cleaned[len(label):].strip()
-                break
-        return cleaned
+        """Remove common labels from text content using extraction rules"""
+        return self.source_extractor.clean_label(text)
     
     def parse_sources(self, source_text: str, lens_name: str, base_folder: str) -> List[Dict]:
-        """Parse multiple sources from source text"""
-        if not source_text:
-            return []
-        
-        sources = []
-        # Split by semicolon, but be careful with semicolons inside parentheses
-        raw_sources = []
-        current = ""
-        paren_count = 0
-        
-        for char in source_text:
-            if char == '(':
-                paren_count += 1
-            elif char == ')':
-                paren_count -= 1
-            elif char == ';' and paren_count == 0:
-                if current.strip():
-                    raw_sources.append(current.strip())
-                current = ""
-                continue
-            current += char
-        
-        # Add the last part
-        if current.strip():
-            raw_sources.append(current.strip())
-        
-        for i, raw_source in enumerate(raw_sources):
-            raw_source = raw_source.strip()
-            if not raw_source:
-                continue
-                
-            # Extract source name (ALL CAPS at the beginning)
-            # Pattern: HOME_SPINE – content or HIGHLIGHTS: content
-            source_match = re.match(r'^([A-Z_\s]+?)\s*[–—-−:]\s*(.+)$', raw_source)
-            
-            if source_match:
-                source_name = source_match.group(1).strip()
-                source_content = source_match.group(2).strip()
-            else:
-                # Fallback: use position-based naming
-                source_name = f"SOURCE_{i+1}"
-                source_content = raw_source
-            
-            sources.append({
-                "source_name": source_name,
-                "content": source_content,
-                "lens": lens_name,
-                "base_folder": base_folder
-            })
-        
-        return sources
+        """Parse multiple sources from source text using extraction rules"""
+        return self.source_extractor.parse_sources(source_text, lens_name, base_folder, self.logger)
 
     def extract_summary(self, paragraphs: List) -> Tuple[str, bool]:
         summary_lines = []
@@ -162,108 +110,8 @@ class DataExtractor:
 
     # c: Variation Extractor
     def extract_variations(self, paragraphs: List, file_path: str) -> List[Dict]:
-        variations = []
-        i = 0
-        current_var_num = 0
-        
-        while i < len(paragraphs):
-            text = paragraphs[i].text.strip()
-            var_match = False
-            var_num = None
-            pat_ref = 1 # Default to Pattern 1
-            title = None
-            
-            # Regex Patterns for different formats
-            # Enhanced patterns to handle more edge cases
-            # Note: [–—-−] handles various dash types (en-dash, em-dash, hyphen, minus)
-            
-            # Format 1: Explicit Pattern Ref -> "Variation 9 – PATTERN 9: Title"
-            m_explicit = re.match(r'^Variation\s+(\d+)\s*[–—-−]\s*PATTERN\s+(\d+):\s*(.+)$', text, re.IGNORECASE)
-            
-            # Format 2: Explicit Var Num -> "VARIATION 6 – Title" or "Variation 6 — Title"
-            m_var_num = re.match(r'^VARIATION\s+(\d+)\s*[–—-−]\s*(?!PATTERN)(.+)$', text, re.IGNORECASE)
-            
-            # Format 3: Number only -> "0 — Title" or "6 — Title"
-            m_num_only = re.match(r'^(\d+)\s*[–—-−]\s*(.+)$', text)
-            
-            # Format 4: Implicit -> "– ONE FIELD, MANY SCALES" or "- THE SOIL REMEMBERS"
-            # Enhanced to handle Unicode characters, Greek text, and more formats
-            m_implicit = re.match(r'^\s*[–—-−]\s*(.+)$', text)
-
-            if m_explicit:
-                var_num = int(m_explicit.group(1))
-                pat_ref = int(m_explicit.group(2))
-                title = m_explicit.group(3).strip()
-                current_var_num = var_num
-                var_match = True
-                
-            elif m_var_num:
-                var_num = int(m_var_num.group(1))
-                title = m_var_num.group(2).strip()
-                # pat_ref stays 1
-                current_var_num = var_num
-                var_match = True
-                
-            elif m_num_only:
-                raw_num = int(m_num_only.group(1))
-                var_num = 10 if raw_num == 0 else raw_num
-                title = m_num_only.group(2).strip()
-                # pat_ref stays 1
-                current_var_num = var_num
-                var_match = True
-                
-            elif m_implicit:
-                # Enhanced validation: Check for title patterns
-                candidate = m_implicit.group(1).strip()
-                
-                # Skip if it looks like content rather than a title
-                # Titles are usually short, mostly uppercase, and don't start with lowercase words
-                if (len(candidate) < 200 and  # Not too long
-                    not candidate.lower().startswith(('the ', 'this ', 'it ', 'a ', 'an ', 'in ', 'on ', 'at ', 'to ', 'for ', 'with ', 'by ')) and  # Not starting with common content words
-                    (candidate.isupper() or  # All uppercase
-                     any(c.isupper() for c in candidate[:10]) or  # Has uppercase in first 10 chars
-                     re.search(r'[A-Z]{2,}', candidate))):  # Contains consecutive uppercase letters
-                    
-                    current_var_num += 1
-                    var_num = current_var_num
-                    title = candidate
-                    # pat_ref stays 1
-                    var_match = True
-
-            if var_match:
-                content = ""
-                j = i + 1
-                while j < len(paragraphs):
-                    p_text = paragraphs[j].text.strip()
-                    if not p_text:
-                        j += 1
-                        continue
-                    
-                    # Stop pattern: Check for next header
-                    # Matches: "Pattern X", "Variation X", "X - Title", "- TITLE"
-                    stop = (
-                        re.match(r'^(Pattern|Variation|VARIATION)\s+\d+', p_text, re.IGNORECASE) or
-                        re.match(r'^\d+\s*[–—-−]', p_text) or
-                        re.match(r'^\s*[–—-−]\s*[A-Z]', p_text)
-                    )
-                    if stop: break
-                    
-                    content = self.clean_text(p_text)
-                    break # Take only the first paragraph as content (usually)
-                
-                if not content:
-                    self.log(f"Variation {var_num} in {file_path} has no content", "warning")
-                
-                variations.append({
-                    "variation_number": var_num,
-                    "pattern_reference": pat_ref,
-                    "title": title,
-                    "content": content
-                })
-                
-                self.log(f"Extracted variation {var_num} for pattern {pat_ref}: {title[:50]}...")
-            i += 1
-        return variations
+        """Extract variations from document paragraphs using extraction rules"""
+        return self.variation_extractor.extract_variations(paragraphs, file_path, self.logger)
 
     # e: Metas Extractor
     def extract_metas(self, file_path: str, base_folder: str) -> Optional[Dict]:
