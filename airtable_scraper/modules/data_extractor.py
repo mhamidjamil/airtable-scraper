@@ -134,8 +134,8 @@ class DataExtractor:
             m_num_only = re.match(r'^(\d+)\s*[–—-−]\s*(.+)$', text)
             
             # Format 4: Implicit -> "– ONE FIELD, MANY SCALES" or "- THE SOIL REMEMBERS"
-            # Enhanced to handle more punctuation and formats
-            m_implicit = re.match(r'^\s*[–—-−]\s*([A-Z0-9][A-Z0-9\s\',.:;!?&()-]+)$', text)
+            # Enhanced to handle Unicode characters, Greek text, and more formats
+            m_implicit = re.match(r'^\s*[–—-−]\s*(.+)$', text)
 
             if m_explicit:
                 var_num = int(m_explicit.group(1))
@@ -160,10 +160,17 @@ class DataExtractor:
                 var_match = True
                 
             elif m_implicit:
-                # Validation: Ensure it looks like a title (mostly uppercase letters)
+                # Enhanced validation: Check for title patterns
                 candidate = m_implicit.group(1).strip()
-                letters = ''.join(c for c in candidate if c.isalpha())
-                if len(letters) > 3 and letters.isupper():
+                
+                # Skip if it looks like content rather than a title
+                # Titles are usually short, mostly uppercase, and don't start with lowercase words
+                if (len(candidate) < 200 and  # Not too long
+                    not candidate.lower().startswith(('the ', 'this ', 'it ', 'a ', 'an ', 'in ', 'on ', 'at ', 'to ', 'for ', 'with ', 'by ')) and  # Not starting with common content words
+                    (candidate.isupper() or  # All uppercase
+                     any(c.isupper() for c in candidate[:10]) or  # Has uppercase in first 10 chars
+                     re.search(r'[A-Z]{2,}', candidate))):  # Contains consecutive uppercase letters
+                    
                     current_var_num += 1
                     var_num = current_var_num
                     title = candidate

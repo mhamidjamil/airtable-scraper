@@ -16,3 +16,4 @@ temp_old_code/data_output/*
 
 .env
 airtable_scraper/json_data/*
+airtable_scraper/json_data/biome_data.json
