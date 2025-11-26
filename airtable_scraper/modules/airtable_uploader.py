@@ -61,23 +61,34 @@ class AirtableUploader:
         return clean_fields
 
     # a: Read already uploaded data
-    def fetch_existing_records(self):
-        self.log("Fetching existing records from Airtable to build sync map...")
+    def fetch_existing_records(self, sync_types=None):
+        """Fetch existing records from Airtable, focusing on needed types"""
+        if sync_types is None:
+            sync_types = ["lenses", "sources", "metas", "patterns", "variations"]
         
-        # 1. Lenses (Key: lens_name)
-        self._fetch_table_map("lenses", "lens_name")
+        self.log(f"Fetching existing records from Airtable for: {', '.join(sync_types)}...")
         
-        # 2. Sources (Key: source_name)
-        self._fetch_table_map("sources", "source_name")
+        # Always fetch patterns if we're syncing variations (needed for linking)
+        tables_to_fetch = sync_types[:]
+        if "variations" in sync_types and "patterns" not in tables_to_fetch:
+            tables_to_fetch.append("patterns")
+            self.log("Also fetching patterns (needed for variation linking)")
         
-        # 3. Metas (Key: title)
-        self._fetch_table_map("metas", "title")
+        # Fetch each required table
+        if "lenses" in tables_to_fetch:
+            self._fetch_table_map("lenses", "lens_name")
         
-        # 4. Patterns (Key: pattern_title) - Assuming titles are unique enough or combined
-        self._fetch_table_map("patterns", "pattern_title")
+        if "sources" in tables_to_fetch:
+            self._fetch_table_map("sources", "source_name")
         
-        # 5. Variations (Key: variation_title)
-        self._fetch_table_map("variations", "variation_title")
+        if "metas" in tables_to_fetch:
+            self._fetch_table_map("metas", "title")
+        
+        if "patterns" in tables_to_fetch:
+            self._fetch_table_map("patterns", "pattern_title")
+        
+        if "variations" in tables_to_fetch:
+            self._fetch_table_map("variations", "variation_title")
         
         self.log("Sync map built successfully.")
 
@@ -213,8 +224,12 @@ class AirtableUploader:
 
         # 4. Sync Patterns (and link to Lens/Source)
         if "patterns" in sync_types or "variations" in sync_types:
-            self.log("Syncing Patterns...")
-            pattern_id_counter = 1 # In real app, might want to query max ID
+            if "patterns" in sync_types:
+                self.log("Syncing Patterns...")
+            if "variations" in sync_types:
+                self.log("Preparing to sync variations...")
+            
+            pattern_id_counter = 1
             
             for doc in data.get("documents", []):
                 lens_id = self.record_map["lenses"].get(self.normalize_for_matching(doc.get("lens")))
@@ -224,9 +239,12 @@ class AirtableUploader:
                     title = p.get("title")
                     src_val = p.get("source", "").strip()
                     src_id = self.record_map["sources"].get(self.normalize_for_matching(src_val))
-                
+                    
                     p_id = None
+                    
+                    # Handle pattern creation/retrieval
                     if "patterns" in sync_types:
+                        # Create or update pattern
                         fields = {
                             "pattern_title": title,
                             "overview": p.get("overview"),
@@ -239,27 +257,32 @@ class AirtableUploader:
                         
                         p_id = self._create_or_update("patterns", title, fields)
                     else:
-                        # Get existing pattern ID for variations
+                        # For variations-only mode, get existing pattern ID
                         p_id = self.record_map["patterns"].get(self.normalize_for_matching(title))
+                        if not p_id:
+                            self.log(f"Warning: Pattern '{title}' not found in Airtable for variations linking", "error")
+                            continue
                     
                     # 5. Sync Variations (Link to Pattern)
                     if "variations" in sync_types and p_id:
                         variation_count = len(p.get("variations", []))
                         self.log(f"Syncing {variation_count} variations for pattern: {title}")
+                        
+                        variations_synced = 0
                         for v in p.get("variations", []):
                             v_title = v.get("title")
                             if v_title:  # Only sync variations with titles
                                 v_fields = {
                                     "variation_title": v_title,
-                                    "variation_number": v.get("variation_number"),
-                                    "content": v.get("content", ""),
-                                    "linked_pattern": [p_id]
+                                    "content": v.get("content", "")
                                 }
-                                self._create_or_update("variations", v_title, v_fields)
-                
-                    pattern_id_counter += 1
-        
-        # Log sync summary
+                                result = self._create_or_update("variations", v_title, v_fields)
+                                if result:
+                                    variations_synced += 1
+                        
+                        self.log(f"Successfully synced {variations_synced}/{variation_count} variations for pattern: {title}")
+                    
+                    pattern_id_counter += 1        # Log sync summary
         total_records = sum(len(cache) for cache in self.record_map.values())
         self.log(f"Sync complete. Total records in cache: {total_records}")
         for table_key, cache in self.record_map.items():

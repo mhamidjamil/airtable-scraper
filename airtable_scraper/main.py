@@ -90,10 +90,8 @@ def main():
     # 3. Upload to Airtable
     logger.info("Initializing Airtable Sync...")
     try:
-        # a: Read already uploaded data
-        uploader.fetch_existing_records()
-        
-        # b: Match and update with selective sync
+        # a: Read already uploaded data and sync selectively
+        uploader.fetch_existing_records(sync_types)
         uploader.sync_data(extracted_data, sync_types)
         
     except Exception as e:
