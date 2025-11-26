@@ -68,16 +68,19 @@ class AirtableUploader:
         
         self.log(f"Fetching existing records from Airtable for: {', '.join(sync_types)}...")
         
-        # Always fetch patterns if we're syncing variations (needed for linking)
+        # Always fetch all required tables for pattern relationships
         tables_to_fetch = sync_types[:]
+        if "patterns" in sync_types:
+            # When syncing patterns, we need ALL related tables for linking
+            required_tables = ["lenses", "sources", "metas", "variations"]
+            for table in required_tables:
+                if table not in tables_to_fetch:
+                    tables_to_fetch.append(table)
+            self.log("Also fetching all related tables (lenses, sources, metas, variations) for pattern linking")
+            
         if "variations" in sync_types and "patterns" not in tables_to_fetch:
             tables_to_fetch.append("patterns")
             self.log("Also fetching patterns (needed for variation linking)")
-            
-        # Always fetch sources if we're syncing patterns (needed for linking)
-        if "patterns" in sync_types and "sources" not in tables_to_fetch:
-            tables_to_fetch.append("sources")
-            self.log("Also fetching sources (needed for pattern linking)")
         
         # Fetch each required table
         if "lenses" in tables_to_fetch:
@@ -192,6 +195,7 @@ class AirtableUploader:
             try:
                 # Validate fields before sending
                 clean_fields = self._validate_fields(fields, table_key)
+                # Debug logging removed
                 resp = requests.post(url, headers=self.headers, json={"fields": clean_fields}, timeout=30)
                 resp.raise_for_status()
                 new_id = resp.json()["id"]
@@ -230,6 +234,8 @@ class AirtableUploader:
                 
         except Exception as e:
             self.log(f"Error linking source {source_id} to pattern {pattern_id}: {str(e)}", "error")
+
+
 
     # b: Match and update
     def sync_data(self, data: Dict, sync_types: List[str] = None):
@@ -362,17 +368,60 @@ class AirtableUploader:
                             "base_folder": base_folder,
                         }
                         
-                        if lens_name: fields["lens"] = lens_name
+                        # Link to Lens
+                        if lens_name: 
+                            lens_id = self.record_map["lenses"].get(self.normalize_for_matching(lens_name))
+                            if lens_id:
+                                fields["lens"] = [lens_id]  # Must be array of record IDs
+                                self.log(f"Linked pattern '{title}' to lens: {lens_name}")
+                            else:
+                                self.log(f"Warning: Lens '{lens_name}' not found for pattern '{title}'", "warning")
+                        
+                        # Link to Sources
                         if source_ids: 
-                            fields["Sources"] = source_ids  # Link to Sources (capitalized field name)
-                            self.log(f"DEBUG: Sending source_ids for pattern '{title}': {source_ids} (type: {type(source_ids)})")
+                            fields["sources"] = source_ids
+                            self.log(f"Linked pattern '{title}' to {len(source_ids)} sources")
+                        
+                        # Link to Meta (find meta record that matches the base_folder)
+                        # The meta records are stored with normalized title as key
+                        # We need to find the meta that has the same base_folder as this pattern
+                        meta_ids = []
+                        for doc_meta in data.get("metas", []):
+                            if doc_meta.get("base_folder") == base_folder:
+                                meta_title = doc_meta.get("title")
+                                if meta_title:
+                                    meta_id = self.record_map["metas"].get(self.normalize_for_matching(meta_title))
+                                    if meta_id:
+                                        meta_ids.append(meta_id)
+                        
+                        if meta_ids:
+                            fields["Metas"] = meta_ids
+                            self.log(f"Linked pattern '{title}' to {len(meta_ids)} meta(s) (base_folder: {base_folder})")
+                        else:
+                            self.log(f"Warning: No meta found for pattern '{title}' with base_folder '{base_folder}'", "warning")
+                        
+                        # Get variation IDs for this pattern
+                        pattern_variation_ids = []
+                        for v in p.get("variations", []):
+                            v_title = v.get("title")
+                            if v_title:
+                                v_id = self.record_map["variations"].get(self.normalize_for_matching(v_title))
+                                if v_id:
+                                    pattern_variation_ids.append(v_id)
+                        
+                        if pattern_variation_ids:
+                            fields["variations"] = pattern_variation_ids
+                            self.log(f"Linked pattern '{title}' to {len(pattern_variation_ids)} variations")
                         
                         p_id = self._create_or_update("patterns", title, fields)
                         
-                        # Update sources to link back to this pattern
+                        # Update sources to link back to this pattern (bidirectional linking)
                         if p_id and source_ids:
                             for source_id in source_ids:
                                 self._link_source_to_pattern(source_id, p_id)
+                        
+                        # Note: Variations table does not have a pattern field, so no bidirectional linking needed
+                        # The pattern -> variations relationship is one-way only
                     else:
                         # For variations-only mode, get existing pattern ID
                         p_id = self.record_map["patterns"].get(self.normalize_for_matching(title))
