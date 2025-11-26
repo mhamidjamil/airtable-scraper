@@ -8,3 +8,10 @@ shoaib-modified-scriv-project Backup/*
 
 shoaib53%202025-11-22%2007-11/*
 airtable_manager/airtable_api_upload/config.json
+*config.json
+temp_old_code/airtable_api_upload/logs*
+temp_old_code/data_output/*
+*.pyc
+*.log
+
+.env

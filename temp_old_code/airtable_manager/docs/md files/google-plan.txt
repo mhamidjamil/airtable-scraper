@@ -1,0 +1,120 @@
+ARCHITECTURE
+Do NOT split the documents first.
+Instead:
+Design a metadata schema + ontology
+Parse each master Google Doc
+Extract its patterns
+Store everything as structured records in Airtable
+Generate smaller pattern-level Google Docs friendly for humans
+Run all queries, analytics, and AI workflows from Airtable — not from Drive
+This gives us:
+Documents → Structured Airtable Records → Global AI Querying
+All machine intelligence should operate on Airtable.
+Google Docs is the human-access layer.
+
+Why Airtable Makes This Better
+Using Airtable instead of Sheets/Firestore:
+You get a real relational database, not a flat sheet
+Link Documents → Patterns → Lenses → Themes
+Add tags, summaries, sources, questions, everything in structured fields
+Add embeddings or vector JSON safely
+Create filtered views for reviewing patterns
+Build dashboards later (themes, clusters, frequency maps)
+Gemini Pro 3 can query Airtable data via API
+The actual Google Docs layer stays clean + minimal
+Airtable is the perfect middle layer between raw content and AI.
+
+Step 0 — Export From Scrivener 
+Before anything touches Google Docs or Airtable, we need a clean, uniform export from Scrivener.
+→ Markdown (.md) with folder hierarchy preserved
+File → Export → Files…
+Choose MultiMarkdown → Markdown (.md)
+Enable: “Use binder hierarchy”
+Export to a folder
+Step 1 — Design the Canonical Pattern Schema
+Every pattern becomes one Airtable row with fields like:
+
+Document ID
+Document Title
+Folder Path
+Interpretive Lens
+Pattern Number
+Pattern Title
+Pattern Text
+Conflict/Choice
+Interpretive Key Summary
+Question
+Sources
+Tags (multiselect)
+Normalized Theme
+Embedding Vector (JSON)
+Google Doc URL (optional)
+
+Build the Parsing Pipeline
+Choose one of these depending on freelancer skills:
+Python + Drive API (recommended)
+Pull each master Google Doc
+Parse out 10 patterns (regex, section markers)
+Normalize headings, spacing, tags
+Push structured rows into Airtable via API
+(Optional) generate pattern-level Google Docs
+Store backlinks in Airtable
+Step 3 — Airtable as the Metadata + Index Layer
+Create these Airtable tables:
+Documents
+400 rows
+Links to folders, lenses, patterns
+Patterns
+4,000 rows
+Structured pattern fields
+One row per pattern
+Linked to Documents
+Linked to Lenses
+Linked to Themes
+Lenses
+List of interpretive lenses
+Linked records
+Themes / Taxonomy
+Emerging categories
+AI-generated or manual
+Airtable gives you:
+filtered views
+grouped views
+embedding storage (JSON)
+automation
+easy export to Gemini or other LLM pipelines
+Step 4 — Global Queries + AI Integrations
+Once Airtable has the structured records, we can run queries like:
+“Show all Pattern 1s sorted by lens.”
+“List all patterns related to spatialization.”
+“Group patterns by narrative tone.”
+“Which documents use the EMOTIONAL SPATIALIZATION lens?”
+“Cluster patterns by similarity and produce theme summaries.”
+LLMs can now:
+perform semantic clustering
+generate cross-document insights
+summarize entire categories
+produce taxonomies
+find contradictions
+discover hidden patterns across the corpus
+All because the data is structured first.
+
+Step 5 — Generate Smaller Pattern-Level Docs
+If you want human-friendly fragment docs:
+Create a script to generate a Google Doc per pattern
+Auto-insert metadata header
+Include backlinks to Airtable + parent document
+Store URL in Airtable
+These are for human browsing only, not for AI.
+The AI lives entirely off the Airtable base.
+
+Recommended Folder Structure
+Keep Drive tidy:
+
+/Master_Documents
+    /Folder_01
+    /Folder_02
+    ...
+/Pattern_Documents (optional)
+    /Pattern_01
+    /Pattern_02

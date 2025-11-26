@@ -1,0 +1,64 @@
+================================================================================
+FINDING VARIATION HEADERS IN DOCUMENT
+================================================================================
+
+Line 47:
+  Text: – PLANETARY NERVOUS SYSTEM
+  Length: 26
+
+  Next: Earth has a nervous system, and you are one neuron in it. When ice sheets crack, you feel the jolt. When forests burn, your chest tightens. When coral bleaches, something in you goes numb. This is not metaphor or empathy—it is structural fact. The forces that wire the magnetic field, solar rays, bar...
+
+Line 49:
+  Text: – YOUR ANXIETY IS EARTH'S FEVER
+  Length: 31
+
+  Next: Fever is not malfunction—it is the body mobilizing to fight infection. Your anxiety is not personal disorder—it is Earth's fever moving through you. The planet is sick with extraction, and every sensitive nervous system registers the heat. Some bodies run cold (numbness, dissociation). Some run hot ...
+
+Line 51:
+  Text: – ONE FIELD, MANY SCALES
+  Length: 24
+
+  Next: The Machine wants you to see reality as a stack of separate layers: personal psychology, social systems, ecological crisis, cosmic forces. The Garden reveals the truth: it is one field expressing itself at many scales. Your burnout and the Amazon's deforestation are not analogous—they are the same e...
+
+Line 53:
+  Text: – COLLECTIVE PSYCHE BLEEDING
+  Length: 28
+
+  Next: The collective psyche is not an abstraction—it is a living membrane, and right now it is bleeding. The wound is visible everywhere: mass shootings, climate denial, algorithmic addiction, species extinction, rising suicide rates. These are not separate problems. They are one hemorrhage, and the blood...
+
+Line 55:
+  Text: – THE SOIL REMEMBERS
+  Length: 20
+
+  Next: Soil holds memory—chemical traces of every season, every flood, every fire. Your body is soil. Your nervous system remembers every extraction: the clearcut forest your ancestors walked through, the enslaved people who worked the land, the animals driven extinct, the rivers poisoned. Epigenetics prov...
+
+Line 57:
+  Text: VARIATION 6 – INNER CLIMATE, OUTER CLIMATE
+  Length: 42
+
+  Next: You have an inner climate—emotional weather patterns, seasons of fertility and dormancy, droughts and floods. And you live inside an outer climate—atmospheric, political, cultural. The Machine wants you to believe these climates are unrelated. The Garden shows you the feedback loops: outer collapse ...
+
+Line 59:
+  Text: VARIATION 7 – WATERSHED CONSCIOUSNESS
+  Length: 37
+
+  Next: A watershed is the land area that drains into a single body of water. Your psyche is a watershed. Grief from the news flows into the same aquifer as grief from your childhood. Joy from a stranger's smile and joy from a spring morning pool in the same reservoir. Toxins from algorithmic feeds and toxi...
+
+Line 61:
+  Text: VARIATION 8 – WE ARE THE CORAL REEF
+  Length: 35
+
+  Next: Coral reefs are the most biodiverse ecosystems on Earth. When ocean temperatures rise even two degrees, the coral bleaches—expelling the algae that give it color and life—and dies. Humans are emotional coral reefs: our richness depends on hosting thousands of micro-species of feeling in delicate sym...
+
+Line 63:
+  Text: VARIATION 9 – MYCORRHIZAL EMPATHY
+  Length: 33
+
+  Next: Trees in a forest are not individuals competing for sunlight. They are a mycorrhizal network—roots intertwined with fungal threads, sharing nutrients, warning each other of danger, caring for saplings who cannot yet photosynthesize. Humans are the same. What you call your emotion is often flowing th...
+
+Line 65:
+  Text: 0 – RECIPROCAL RESTORATION
+  Length: 26
+
+  Next: Indigenous land practices know: you cannot take without giving back. The Garden applies this to emotional ecology: reciprocal restoration. Every time you scroll doom, you extract nutrients from the inner biome without replenishing them. Every time you bloom-scroll—blessing what you see, tending what...
+
