@@ -36,6 +36,59 @@ class DataExtractor:
                 cleaned = cleaned[len(label):].strip()
                 break
         return cleaned
+    
+    def parse_sources(self, source_text: str, lens_name: str, base_folder: str) -> List[Dict]:
+        """Parse multiple sources from source text"""
+        if not source_text:
+            return []
+        
+        sources = []
+        # Split by semicolon, but be careful with semicolons inside parentheses
+        raw_sources = []
+        current = ""
+        paren_count = 0
+        
+        for char in source_text:
+            if char == '(':
+                paren_count += 1
+            elif char == ')':
+                paren_count -= 1
+            elif char == ';' and paren_count == 0:
+                if current.strip():
+                    raw_sources.append(current.strip())
+                current = ""
+                continue
+            current += char
+        
+        # Add the last part
+        if current.strip():
+            raw_sources.append(current.strip())
+        
+        for i, raw_source in enumerate(raw_sources):
+            raw_source = raw_source.strip()
+            if not raw_source:
+                continue
+                
+            # Extract source name (ALL CAPS at the beginning)
+            # Pattern: HOME_SPINE – content or HIGHLIGHTS: content
+            source_match = re.match(r'^([A-Z_\s]+?)\s*[–—-−:]\s*(.+)$', raw_source)
+            
+            if source_match:
+                source_name = source_match.group(1).strip()
+                source_content = source_match.group(2).strip()
+            else:
+                # Fallback: use position-based naming
+                source_name = f"SOURCE_{i+1}"
+                source_content = raw_source
+            
+            sources.append({
+                "source_name": source_name,
+                "content": source_content,
+                "lens": lens_name,
+                "base_folder": base_folder
+            })
+        
+        return sources
 
     def extract_summary(self, paragraphs: List) -> Tuple[str, bool]:
         summary_lines = []
@@ -101,7 +154,7 @@ class DataExtractor:
                     "title": title,
                     "overview": overview,
                     "choice": choice,
-                    "source": source,
+                    "source": source,  # Keep original for backward compatibility
                     "variations": []
                 })
             i += 1
@@ -288,15 +341,21 @@ class DataExtractor:
                 # d: Lens Extractor (Lens is the document concept/filename)
                 lens_name = f.stem
                 
-                # b: Source Extractor (Sources are inside patterns)
-                # (Implicitly handled as they are part of the pattern dict)
+                # b: Source Extractor - Extract and parse multiple sources
+                all_sources = []
+                for pattern in patterns:
+                    pattern_sources = self.parse_sources(pattern.get("source", ""), lens_name, folder_name)
+                    all_sources.extend(pattern_sources)
+                    # Store parsed sources in pattern for reference
+                    pattern["parsed_sources"] = pattern_sources
 
                 extracted_data["documents"].append({
                     "lens": lens_name,
                     "base_folder": folder_name,
                     "file_path": str(f),
                     "summary": summary,
-                    "patterns": patterns
+                    "patterns": patterns,
+                    "sources": all_sources  # Add extracted sources
                 })
                 
             except Exception as e:
