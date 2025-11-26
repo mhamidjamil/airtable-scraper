@@ -30,6 +30,11 @@ class AirtableUploader:
             else: self.logger.info(msg)
         else:
             print(f"[{level.upper()}] {msg}")
+    
+    def normalize_for_matching(self, text: str) -> str:
+        """Normalize text for robust duplicate matching"""
+        if not text: return ""
+        return text.strip().lower()
 
     # a: Read already uploaded data
     def fetch_existing_records(self):
@@ -61,8 +66,11 @@ class AirtableUploader:
         for r in records:
             val = r["fields"].get(primary_field)
             if val:
-                self.record_map[table_key][val] = r["id"]
-                count += 1
+                # Use normalized key for robust matching
+                normalized_key = self.normalize_for_matching(val)
+                if normalized_key:  # Only store non-empty keys
+                    self.record_map[table_key][normalized_key] = r["id"]
+                    count += 1
         self.log(f"  - {table_name}: {count} existing records mapped.")
 
     def _get_all_records(self, table_name: str) -> List[Dict]:
@@ -90,35 +98,39 @@ class AirtableUploader:
 
     def _create_or_update(self, table_key: str, unique_val: str, fields: Dict) -> str:
         """
-        Uploads data. If exists, returns ID (skips update for now to be safe, or could update).
+        Uploads data. If exists, returns ID and updates; otherwise creates new record.
         Returns: Record ID
         """
         if not unique_val: return None
         
+        # Normalize key for consistent matching
+        normalized_key = self.normalize_for_matching(unique_val)
+        if not normalized_key: return None
+        
         table_name = self.tables.get(table_key)
-        existing_id = self.record_map[table_key].get(unique_val)
+        existing_id = self.record_map[table_key].get(normalized_key)
         
         if existing_id:
-            # Logic: Match current extraction -> Update not synced
-            # For now, we assume if it exists, we skip or patch. 
-            # Let's Patch (Update) to ensure data is fresh.
+            # Update existing record to ensure data is fresh
             url = f"{self.base_url}/{table_name}/{existing_id}"
             try:
-                requests.patch(url, headers=self.headers, json={"fields": fields}, timeout=30)
-                # self.log(f"Updated {table_key}: {unique_val}")
+                resp = requests.patch(url, headers=self.headers, json={"fields": fields}, timeout=30)
+                resp.raise_for_status()
+                self.log(f"Updated existing {table_key}: {unique_val}")
                 return existing_id
             except Exception as e:
                 self.log(f"Failed to update {table_key} ({unique_val}): {str(e)}", "error")
                 return existing_id
         else:
-            # Create new
+            # Create new record
             url = f"{self.base_url}/{table_name}"
             try:
                 resp = requests.post(url, headers=self.headers, json={"fields": fields}, timeout=30)
                 resp.raise_for_status()
                 new_id = resp.json()["id"]
-                self.record_map[table_key][unique_val] = new_id # Update cache
-                self.log(f"Created {table_key}: {unique_val}")
+                # Update cache with normalized key
+                self.record_map[table_key][normalized_key] = new_id
+                self.log(f"Created new {table_key}: {unique_val}")
                 return new_id
             except Exception as e:
                 self.log(f"Failed to create {table_key} ({unique_val}): {str(e)}", "error")
@@ -184,6 +196,8 @@ class AirtableUploader:
                 
                 # 5. Sync Variations (Link to Pattern)
                 if p_id:
+                    variation_count = len(p.get("variations", []))
+                    self.log(f"Syncing {variation_count} variations for pattern: {title}")
                     for v in p.get("variations", []):
                         v_title = v.get("title")
                         v_fields = {
@@ -196,4 +210,10 @@ class AirtableUploader:
                 
                 pattern_id_counter += 1
         
+        # Log sync summary
+        total_records = sum(len(cache) for cache in self.record_map.values())
+        self.log(f"Sync complete. Total records in cache: {total_records}")
+        for table_key, cache in self.record_map.items():
+            if cache:
+                self.log(f"  {table_key}: {len(cache)} records")
         self.log("Sync complete.")

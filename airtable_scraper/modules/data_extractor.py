@@ -117,51 +117,57 @@ class DataExtractor:
             text = paragraphs[i].text.strip()
             var_match = False
             var_num = None
-            pat_ref = None
+            pat_ref = 1 # Default to Pattern 1
             title = None
             
-            # Check formats
-            # 1. VARIATION X – PATTERN Y: Title
-            m1 = re.match(r'^VARIATION\s+(\d+)\s*[–—-]\s*PATTERN\s+(\d+):\s*(.+)$', text, re.IGNORECASE)
-            # 2. – PATTERN X: Title
-            m2 = re.match(r'^\s*[–—-]\s*PATTERN\s+(\d+):\s*(.+)$', text, re.IGNORECASE)
-            # 3. Variation X — Title
-            m3 = re.match(r'^Variation\s+(\d+)\s*[–—-]\s*(.+)$', text, re.IGNORECASE)
-            # 4. X — Title
-            m4 = re.match(r'^(\d+)\s*[–—-]\s*(.+)$', text)
-            # 5. – UPPERCASE TITLE (Implicit)
-            m5 = re.match(r'^\s*[–—-]\s*([A-Z][A-Z\s\',.-]+)$', text)
+            # Regex Patterns for different formats
+            # Enhanced patterns to handle more edge cases
+            # Note: [–—-−] handles various dash types (en-dash, em-dash, hyphen, minus)
+            
+            # Format 1: Explicit Pattern Ref -> "Variation 9 – PATTERN 9: Title"
+            m_explicit = re.match(r'^Variation\s+(\d+)\s*[–—-−]\s*PATTERN\s+(\d+):\s*(.+)$', text, re.IGNORECASE)
+            
+            # Format 2: Explicit Var Num -> "VARIATION 6 – Title" or "Variation 6 — Title"
+            m_var_num = re.match(r'^VARIATION\s+(\d+)\s*[–—-−]\s*(?!PATTERN)(.+)$', text, re.IGNORECASE)
+            
+            # Format 3: Number only -> "0 — Title" or "6 — Title"
+            m_num_only = re.match(r'^(\d+)\s*[–—-−]\s*(.+)$', text)
+            
+            # Format 4: Implicit -> "– ONE FIELD, MANY SCALES" or "- THE SOIL REMEMBERS"
+            # Enhanced to handle more punctuation and formats
+            m_implicit = re.match(r'^\s*[–—-−]\s*([A-Z0-9][A-Z0-9\s\',.:;!?&()-]+)$', text)
 
-            if m1:
-                var_num, pat_ref, title = int(m1.group(1)), int(m1.group(2)), m1.group(3).strip()
-                var_match = True
+            if m_explicit:
+                var_num = int(m_explicit.group(1))
+                pat_ref = int(m_explicit.group(2))
+                title = m_explicit.group(3).strip()
                 current_var_num = var_num
-            elif m2:
-                pat_ref, title = int(m2.group(1)), m2.group(2).strip()
-                var_num = pat_ref
                 var_match = True
+                
+            elif m_var_num:
+                var_num = int(m_var_num.group(1))
+                title = m_var_num.group(2).strip()
+                # pat_ref stays 1
                 current_var_num = var_num
-            elif m3:
-                var_num, title = int(m3.group(1)), m3.group(2).strip()
-                pat_ref = 1
                 var_match = True
+                
+            elif m_num_only:
+                raw_num = int(m_num_only.group(1))
+                var_num = 10 if raw_num == 0 else raw_num
+                title = m_num_only.group(2).strip()
+                # pat_ref stays 1
                 current_var_num = var_num
-            elif m4:
-                num = int(m4.group(1))
-                var_num = 10 if num == 0 else num
-                title = m4.group(2).strip()
-                pat_ref = 1
                 var_match = True
-                current_var_num = var_num
-            elif m5:
-                # Additional validation for implicit format
-                t_cand = m5.group(1).strip()
-                letters = ''.join(c for c in t_cand if c.isalpha())
+                
+            elif m_implicit:
+                # Validation: Ensure it looks like a title (mostly uppercase letters)
+                candidate = m_implicit.group(1).strip()
+                letters = ''.join(c for c in candidate if c.isalpha())
                 if len(letters) > 3 and letters.isupper():
                     current_var_num += 1
                     var_num = current_var_num
-                    title = t_cand
-                    pat_ref = 1
+                    title = candidate
+                    # pat_ref stays 1
                     var_match = True
 
             if var_match:
@@ -173,13 +179,17 @@ class DataExtractor:
                         j += 1
                         continue
                     
-                    # Stop pattern
-                    stop = (re.match(r'^(Pattern|Variation|VARIATION|\d+\s*[–—-])\s', p_text, re.IGNORECASE) or
-                            re.match(r'^\s*[–—-]\s*([A-Z][A-Z\s\',.-]+)$', p_text))
+                    # Stop pattern: Check for next header
+                    # Matches: "Pattern X", "Variation X", "X - Title", "- TITLE"
+                    stop = (
+                        re.match(r'^(Pattern|Variation|VARIATION)\s+\d+', p_text, re.IGNORECASE) or
+                        re.match(r'^\d+\s*[–—-−]', p_text) or
+                        re.match(r'^\s*[–—-−]\s*[A-Z]', p_text)
+                    )
                     if stop: break
                     
                     content = self.clean_text(p_text)
-                    break
+                    break # Take only the first paragraph as content (usually)
                 
                 if not content:
                     self.log(f"Variation {var_num} in {file_path} has no content", "warning")
@@ -190,6 +200,8 @@ class DataExtractor:
                     "title": title,
                     "content": content
                 })
+                
+                self.log(f"Extracted variation {var_num} for pattern {pat_ref}: {title[:50]}...")
             i += 1
         return variations
 
@@ -264,6 +276,7 @@ class DataExtractor:
                         "title": v["title"],
                         "content": v["content"]
                     })
+                    self.log(f"Linked variation {v['variation_number']} to pattern {target['pattern_number']}: {target['title'][:30]}...")
 
                 # d: Lens Extractor (Lens is the document concept/filename)
                 lens_name = f.stem
@@ -288,4 +301,14 @@ class DataExtractor:
             json.dump(extracted_data, f, indent=2, ensure_ascii=False)
             
         self.log(f"Extraction complete. Saved to {out_file}")
+        # Log extraction summary
+        doc_count = len(extracted_data.get("documents", []))
+        meta_count = len(extracted_data.get("metas", []))
+        total_patterns = sum(len(doc.get("patterns", [])) for doc in extracted_data.get("documents", []))
+        total_variations = sum(len(pattern.get("variations", [])) 
+                              for doc in extracted_data.get("documents", []) 
+                              for pattern in doc.get("patterns", []))
+        
+        self.log(f"Extraction Summary - Documents: {doc_count}, Patterns: {total_patterns}, Variations: {total_variations}, Metas: {meta_count}")
+        
         return extracted_data
