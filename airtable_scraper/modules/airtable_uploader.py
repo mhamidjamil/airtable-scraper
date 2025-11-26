@@ -35,6 +35,30 @@ class AirtableUploader:
         """Normalize text for robust duplicate matching"""
         if not text: return ""
         return text.strip().lower()
+    
+    def _validate_fields(self, fields: Dict, table_key: str) -> Dict:
+        """Validate and clean fields before sending to Airtable"""
+        clean_fields = {}
+        
+        for key, value in fields.items():
+            if value is None:
+                continue
+            elif isinstance(value, str):
+                # Trim whitespace and limit length
+                clean_value = value.strip()
+                if len(clean_value) > 100000:  # Airtable limit
+                    clean_value = clean_value[:99997] + "..."
+                if clean_value:  # Only add non-empty strings
+                    clean_fields[key] = clean_value
+            elif isinstance(value, list):
+                # Remove None values from lists
+                clean_list = [v for v in value if v is not None]
+                if clean_list:
+                    clean_fields[key] = clean_list
+            elif isinstance(value, (int, float, bool)):
+                clean_fields[key] = value
+        
+        return clean_fields
 
     # a: Read already uploaded data
     def fetch_existing_records(self):
@@ -125,90 +149,115 @@ class AirtableUploader:
             # Create new record
             url = f"{self.base_url}/{table_name}"
             try:
-                resp = requests.post(url, headers=self.headers, json={"fields": fields}, timeout=30)
+                # Validate fields before sending
+                clean_fields = self._validate_fields(fields, table_key)
+                resp = requests.post(url, headers=self.headers, json={"fields": clean_fields}, timeout=30)
                 resp.raise_for_status()
                 new_id = resp.json()["id"]
                 # Update cache with normalized key
                 self.record_map[table_key][normalized_key] = new_id
                 self.log(f"Created new {table_key}: {unique_val}")
                 return new_id
+            except requests.exceptions.HTTPError as e:
+                if e.response.status_code == 422:
+                    self.log(f"Field validation error for {table_key} ({unique_val}): {e.response.text}", "error")
+                else:
+                    self.log(f"HTTP error creating {table_key} ({unique_val}): {str(e)}", "error")
+                return None
             except Exception as e:
                 self.log(f"Failed to create {table_key} ({unique_val}): {str(e)}", "error")
                 return None
 
     # b: Match and update
-    def sync_data(self, data: Dict):
-        self.log("Starting data sync...")
+    def sync_data(self, data: Dict, sync_types: List[str] = None):
+        """Sync data with optional filtering by type"""
+        if sync_types is None:
+            sync_types = ["lenses", "sources", "metas", "patterns", "variations"]
+        
+        # Save what we're about to sync
+        sync_type_str = "_".join(sync_types) if len(sync_types) > 1 else sync_types[0]
+        self.save_sync_data(data, sync_type_str)
+        
+        self.log(f"Starting selective data sync for: {', '.join(sync_types)}...")
         
         # 1. Sync Lenses
-        self.log("Syncing Lenses...")
-        for doc in data.get("documents", []):
-            lens_name = doc.get("lens")
-            if lens_name:
-                self._create_or_update("lenses", lens_name, {
-                    "lens_name": lens_name,
-                    "content": doc.get("summary", "")
-                })
+        if "lenses" in sync_types:
+            self.log("Syncing Lenses...")
+            for doc in data.get("documents", []):
+                lens_name = doc.get("lens")
+                if lens_name:
+                    self._create_or_update("lenses", lens_name, {
+                        "lens_name": lens_name,
+                        "content": doc.get("summary", "")
+                    })
 
         # 2. Sync Sources
-        self.log("Syncing Sources...")
-        for doc in data.get("documents", []):
-            for p in doc.get("patterns", []):
-                src = p.get("source", "").strip()
-                if src:
-                    self._create_or_update("sources", src, {"source_name": src})
+        if "sources" in sync_types:
+            self.log("Syncing Sources...")
+            for doc in data.get("documents", []):
+                for p in doc.get("patterns", []):
+                    src = p.get("source", "").strip()
+                    if src:
+                        self._create_or_update("sources", src, {"source_name": src})
 
         # 3. Sync Metas
-        self.log("Syncing Metas...")
-        for m in data.get("metas", []):
-            self._create_or_update("metas", m.get("title"), {
-                "title": m.get("title"),
-                "subtitle": m.get("subtitle"),
-                "content": m.get("content"),
-                "base_folder": m.get("base_folder")
-            })
+        if "metas" in sync_types:
+            self.log("Syncing Metas...")
+            for m in data.get("metas", []):
+                self._create_or_update("metas", m.get("title"), {
+                    "title": m.get("title"),
+                    "subtitle": m.get("subtitle"),
+                    "content": m.get("content"),
+                    "base_folder": m.get("base_folder")
+                })
 
         # 4. Sync Patterns (and link to Lens/Source)
-        self.log("Syncing Patterns...")
-        pattern_id_counter = 1 # In real app, might want to query max ID
-        
-        for doc in data.get("documents", []):
-            lens_id = self.record_map["lenses"].get(doc.get("lens"))
-            base_folder = doc.get("base_folder")
+        if "patterns" in sync_types or "variations" in sync_types:
+            self.log("Syncing Patterns...")
+            pattern_id_counter = 1 # In real app, might want to query max ID
             
-            for p in doc.get("patterns", []):
-                title = p.get("title")
-                src_val = p.get("source", "").strip()
-                src_id = self.record_map["sources"].get(src_val)
+            for doc in data.get("documents", []):
+                lens_id = self.record_map["lenses"].get(self.normalize_for_matching(doc.get("lens")))
+                base_folder = doc.get("base_folder")
                 
-                fields = {
-                    "pattern_title": title,
-                    "overview": p.get("overview"),
-                    "choice": p.get("choice"),
-                    "base_folder": base_folder,
-                    # "pattern_id": f"P{pattern_id_counter:03d}" # Optional: only if creating new
-                }
+                for p in doc.get("patterns", []):
+                    title = p.get("title")
+                    src_val = p.get("source", "").strip()
+                    src_id = self.record_map["sources"].get(self.normalize_for_matching(src_val))
                 
-                if lens_id: fields["lens"] = [lens_id]
-                if src_id: fields["sources"] = [src_id]
-                
-                p_id = self._create_or_update("patterns", title, fields)
-                
-                # 5. Sync Variations (Link to Pattern)
-                if p_id:
-                    variation_count = len(p.get("variations", []))
-                    self.log(f"Syncing {variation_count} variations for pattern: {title}")
-                    for v in p.get("variations", []):
-                        v_title = v.get("title")
-                        v_fields = {
-                            "variation_title": v_title,
-                            "variation_number": v.get("variation_number"),
-                            "content": v.get("content"),
-                            "linked_pattern": [p_id]
+                    p_id = None
+                    if "patterns" in sync_types:
+                        fields = {
+                            "pattern_title": title,
+                            "overview": p.get("overview"),
+                            "choice": p.get("choice"),
+                            "base_folder": base_folder,
                         }
-                        self._create_or_update("variations", v_title, v_fields)
+                        
+                        if lens_id: fields["lens"] = [lens_id]
+                        if src_id: fields["sources"] = [src_id]
+                        
+                        p_id = self._create_or_update("patterns", title, fields)
+                    else:
+                        # Get existing pattern ID for variations
+                        p_id = self.record_map["patterns"].get(self.normalize_for_matching(title))
+                    
+                    # 5. Sync Variations (Link to Pattern)
+                    if "variations" in sync_types and p_id:
+                        variation_count = len(p.get("variations", []))
+                        self.log(f"Syncing {variation_count} variations for pattern: {title}")
+                        for v in p.get("variations", []):
+                            v_title = v.get("title")
+                            if v_title:  # Only sync variations with titles
+                                v_fields = {
+                                    "variation_title": v_title,
+                                    "variation_number": v.get("variation_number"),
+                                    "content": v.get("content", ""),
+                                    "linked_pattern": [p_id]
+                                }
+                                self._create_or_update("variations", v_title, v_fields)
                 
-                pattern_id_counter += 1
+                    pattern_id_counter += 1
         
         # Log sync summary
         total_records = sum(len(cache) for cache in self.record_map.values())
@@ -217,3 +266,20 @@ class AirtableUploader:
             if cache:
                 self.log(f"  {table_key}: {len(cache)} records")
         self.log("Sync complete.")
+    
+    def save_sync_data(self, data: Dict, sync_type: str = "all"):
+        """Save what's being synced to timestamped JSON file"""
+        from datetime import datetime
+        from pathlib import Path
+        import json
+        
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        filename = f"airtable_sync_{sync_type}_{timestamp}.json"
+        filepath = Path("json_data") / filename
+        
+        try:
+            with open(filepath, 'w', encoding='utf-8') as f:
+                json.dump(data, f, indent=2, ensure_ascii=False)
+            self.log(f"Saved sync data to: {filepath}")
+        except Exception as e:
+            self.log(f"Failed to save sync data: {str(e)}", "error")
