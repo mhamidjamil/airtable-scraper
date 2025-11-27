@@ -71,7 +71,7 @@ def determine_sync_types(args):
     if not sync_types:
         sync_types = ['lenses', 'sources', 'metas', 'patterns', 'variations']
     
-    return sync_types
+    return sync_types, args.sync
 
 def find_project_folders(start_path_str: str) -> list[Path]:
     """
@@ -116,13 +116,19 @@ def find_project_folders(start_path_str: str) -> list[Path]:
 def main():
     # Parse command line arguments
     args = parse_arguments()
-    sync_types = determine_sync_types(args)
+    sync_types, enable_linking = determine_sync_types(args)
     
     logger.info("="*50)
     logger.info("STARTING AIRTABLE SCRAPER PROJECT")
     logger.info("="*50)
     logger.info(f"Sync Types: {', '.join(sync_types)}")
     logger.info(f"Target Folder: {args.folder}")
+    logger.info(f"Linking Mode: {'Enabled' if enable_linking else 'Disabled'}")
+    
+    # Auto-include patterns when variations are requested
+    if 'variations' in sync_types and 'patterns' not in sync_types:
+        sync_types.append('patterns')
+        logger.info("Auto-including patterns (required for variation linking)")
     
     if args.extract_only:
         logger.info("Mode: Extract only (no Airtable sync)")
@@ -160,9 +166,15 @@ def main():
             uploader = AirtableUploader(log_handler=logger)
             
             try:
+                # Always fetch patterns when syncing variations for proper linking
+                fetch_types = sync_types[:]
+                if 'variations' in sync_types and 'patterns' not in fetch_types:
+                    fetch_types.append('patterns')
+                    logger.info("Also fetching patterns for variation linking")
+                
                 # Read already uploaded data and sync selectively
-                uploader.fetch_existing_records(sync_types)
-                uploader.sync_data(extracted_data, sync_types)
+                uploader.fetch_existing_records(fetch_types)
+                uploader.sync_data(extracted_data, sync_types, enable_linking)
                 
             except Exception as e:
                 logger.error(f"Upload failed for {project_path.name}: {str(e)}")

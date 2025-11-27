@@ -203,6 +203,7 @@ class AirtableUploader:
             try:
                 # Validate fields before sending
                 clean_fields = self._validate_fields(fields, table_key)
+                # Debug logging removed
                 resp = requests.post(url, headers=self.headers, json={"fields": clean_fields}, timeout=30)
                 resp.raise_for_status()
                 new_id = resp.json()["id"]
@@ -212,10 +213,7 @@ class AirtableUploader:
                 return new_id
             except requests.exceptions.HTTPError as e:
                 if e.response.status_code == 422:
-                    self.log(f"Field validation error for {table_key} ({unique_val}): {e.response.text}", "error")
-                    # Provide suggestions for common field name issues
-                    if "Unknown field name" in e.response.text and table_key == "variations":
-                        self.log("SUGGESTION: Check your Airtable variations table field names. Try: 'Pattern', 'Patterns', 'pattern_title'", "error")
+                    error_detail = e.response.text\n                    self.log(f\"Field validation error for {table_key} ({unique_val}): {error_detail}\", \"error\")\n                    # Provide suggestions for common field name issues\n                    if \"Unknown field name\" in error_detail and table_key == \"variations\":\n                        self.log(\"SUGGESTION: Check your Airtable variations table field names. Common names: 'Pattern', 'Patterns', 'pattern_title', etc.\", \"error\")
                 else:
                     self.log(f"HTTP error creating {table_key} ({unique_val}): {str(e)}", "error")
                 return None
@@ -245,8 +243,10 @@ class AirtableUploader:
         except Exception as e:
             self.log(f"Error linking source {source_id} to pattern {pattern_id}: {str(e)}", "error")
 
+
+
     # b: Match and update
-    def sync_data(self, data: Dict, sync_types: List[str] = None, enable_linking: bool = False):
+    def sync_data(self, data: Dict, sync_types: List[str] = None):
         """Sync data with optional filtering by type"""
         if sync_types is None:
             sync_types = ["lenses", "sources", "metas", "patterns", "variations"]
@@ -257,49 +257,123 @@ class AirtableUploader:
         
         self.log(f"Starting selective data sync for: {', '.join(sync_types)}...")
         
-        # 1. Sync Lenses first (foundational)
+        # 1. Sync Lenses
         if "lenses" in sync_types:
             self.log("Syncing Lenses...")
             for doc in data.get("documents", []):
                 lens_name = doc.get("lens")
-                base_folder = doc.get("base_folder")
-                
                 if lens_name:
-                    fields = {
-                        "lens_title": lens_name,
-                        "base_folder": base_folder,
-                    }
-                    self._create_or_update("lenses", lens_name, fields)
-        
-        # 2. Sync Metas 
+                    self._create_or_update("lenses", lens_name, {
+                        "lens_name": lens_name,
+                        "content": doc.get("summary", "")
+                    })
+
+        # 2. Sync Sources (Updated to handle multiple sources with new fields)
+        if "sources" in sync_types:
+            self.log("Syncing Sources...")
+            sources_synced = 0
+            
+            for doc in data.get("documents", []):
+                lens_name = doc.get("lens", "")
+                base_folder = doc.get("base_folder", "")
+                pattern_count = 0
+                
+                # Process patterns to extract their parsed sources
+                for pattern in doc.get("patterns", []):
+                    pattern_count += 1
+                    source_count_for_pattern = 0
+                    
+                    for parsed_source in pattern.get("parsed_sources", []):
+                        source_name = parsed_source.get("source_name")
+                        source_content = parsed_source.get("content", "")
+                        
+                        if source_name and source_content:
+                            # Create composite key for uniqueness check (same as mapping logic)
+                            composite_key = f"{source_content}|{lens_name}|{base_folder}"
+                            content_hash = str(hash(composite_key))
+                            
+                            # Check if this exact source already exists in Airtable
+                            if content_hash not in self.record_map.get("sources", {}):
+                                
+                                # Create unique record name for each source
+                                record_name = f"{source_name}_P{pattern_count}_{lens_name}_{content_hash[:4]}"
+                                
+                                fields = {
+                                    "content": source_content,  # The actual source text goes in content field
+                                    "lense": lens_name,        # Note: 'lense' as per your table structure  
+                                    "base_folder": base_folder
+                                }
+                                
+                                # Try to link to pattern if it exists
+                                pattern_title = pattern.get("title")
+                                if pattern_title:
+                                    p_id = self.record_map["patterns"].get(self.normalize_for_matching(pattern_title))
+                                    if p_id:
+                                        fields["Patterns"] = [p_id]
+                                
+                                # Use unique record name to ensure separate records
+                                result = self._create_or_update("sources", record_name, fields)
+                                
+                                # Update cache with content hash so pattern linking can find this new source
+                                if result:
+                                    self.record_map["sources"][content_hash] = result
+                                    
+                                sources_synced += 1
+                                source_count_for_pattern += 1
+                                self.log(f"Created source #{sources_synced}: {source_name} for pattern {pattern_count} (lense: {lens_name})")
+                            else:
+                                self.log(f"Skipped duplicate source: {source_name} (already exists)")
+                    
+                    if source_count_for_pattern > 0:
+                        self.log(f"Pattern {pattern_count}: Created {source_count_for_pattern} source records")
+            
+            self.log(f"Total unique sources created: {sources_synced}")
+
+        # 3. Sync Metas
         if "metas" in sync_types:
             self.log("Syncing Metas...")
-            for meta in data.get("metas", []):
-                meta_title = meta.get("title")
-                base_folder = meta.get("base_folder")
-                
-                if meta_title:
-                    fields = {
-                        "meta_title": meta_title,
-                        "subtitle": meta.get("subtitle"),
-                        "content": meta.get("content"),
-                        "base_folder": base_folder,
-                    }
-                    self._create_or_update("metas", meta_title, fields)
-        
-        # 3. Sync Patterns and Variations (patterns first, always needed for variations)
+            for m in data.get("metas", []):
+                self._create_or_update("metas", m.get("title"), {
+                    "title": m.get("title"),
+                    "subtitle": m.get("subtitle"),
+                    "content": m.get("content")
+                    # Note: base_folder removed - it's a Single Select field in Airtable
+                })
+
+        # 4. Sync Patterns (and link to Lens/Source)
         if "patterns" in sync_types or "variations" in sync_types:
             if "patterns" in sync_types:
                 self.log("Syncing Patterns...")
             if "variations" in sync_types:
                 self.log("Preparing to sync variations...")
             
+            pattern_id_counter = 1
+            
             for doc in data.get("documents", []):
-                lens_name = doc.get("lens")
+                lens_name = doc.get("lens")  # Get lens name as string
                 base_folder = doc.get("base_folder")
                 
                 for p in doc.get("patterns", []):
                     title = p.get("title")
+                    
+                    # Get source IDs from parsed sources using composite keys
+                    source_ids = []
+                    
+                    for parsed_source in p.get("parsed_sources", []):
+                        source_name = parsed_source.get("source_name")
+                        source_content = parsed_source.get("content", "")
+                        
+                        if source_name and source_content:
+                            # Use the same composite key as during source creation
+                            composite_key = f"{source_content}|{lens_name}|{base_folder}"
+                            content_hash = str(hash(composite_key))
+                            
+                            source_id = self.record_map["sources"].get(content_hash)
+                            if source_id:
+                                source_ids.append(source_id)
+                                self.log(f"Linked pattern '{title}' to source: {source_name}")
+                            else:
+                                self.log(f"Warning: Source '{source_name}' not found for pattern '{title}'", "warning")
                     
                     p_id = None
                     
@@ -313,7 +387,63 @@ class AirtableUploader:
                             "base_folder": base_folder,
                         }
                         
+                        # Link to Lens
+                        if lens_name: 
+                            lens_id = self.record_map["lenses"].get(self.normalize_for_matching(lens_name))
+                            if lens_id:
+                                fields["lens"] = [lens_id]  # Must be array of record IDs
+                                self.log(f"Linked pattern '{title}' to lens: {lens_name}")
+                            else:
+                                self.log(f"Warning: Lens '{lens_name}' not found for pattern '{title}'", "warning")
+                        
+                        # Link to Sources
+                        if source_ids: 
+                            fields["sources"] = source_ids
+                            self.log(f"Linked pattern '{title}' to {len(source_ids)} sources")
+                        
+                        # Link to Meta (find meta record that matches the base_folder)
+                        # The meta records are stored with normalized title as key
+                        # We need to find the meta that has the same base_folder as this pattern
+                        meta_ids = []
+                        for doc_meta in data.get("metas", []):
+                            # Link ALL metas from the same base_folder
+                            if doc_meta.get("base_folder") == base_folder:
+                                meta_title = doc_meta.get("title")
+                                if meta_title:
+                                    meta_id = self.record_map["metas"].get(self.normalize_for_matching(meta_title))
+                                    if meta_id:
+                                        meta_ids.append(meta_id)
+                        
+                        if meta_ids:
+                            fields["Metas"] = meta_ids
+                            self.log(f"Linked pattern '{title}' to {len(meta_ids)} meta(s) (base_folder: {base_folder})")
+                        else:
+                            # Only warn if we expected metas but found none
+                            if data.get("metas"):
+                                self.log(f"Warning: No matching meta records found for pattern '{title}' (base_folder: {base_folder})", "warning")
+                        
+                        # Get variation IDs for this pattern
+                        pattern_variation_ids = []
+                        for v in p.get("variations", []):
+                            v_title = v.get("title")
+                            if v_title:
+                                v_id = self.record_map["variations"].get(self.normalize_for_matching(v_title))
+                                if v_id:
+                                    pattern_variation_ids.append(v_id)
+                        
+                        if pattern_variation_ids:
+                            fields["variations"] = pattern_variation_ids
+                            self.log(f"Linked pattern '{title}' to {len(pattern_variation_ids)} variations")
+                        
                         p_id = self._create_or_update("patterns", title, fields)
+                        
+                        # Update sources to link back to this pattern (bidirectional linking)
+                        if p_id and source_ids:
+                            for source_id in source_ids:
+                                self._link_source_to_pattern(source_id, p_id)
+                        
+                        # Note: Variations table does not have a pattern field, so no bidirectional linking needed
+                        # The pattern -> variations relationship is one-way only
                     else:
                         # For variations-only mode, get existing pattern ID
                         p_id = self.record_map["patterns"].get(self.normalize_for_matching(title))
@@ -321,7 +451,7 @@ class AirtableUploader:
                             self.log(f"Warning: Pattern '{title}' not found in Airtable for variations linking", "error")
                             continue
                     
-                    # 2. Sync Variations (Link to Pattern)
+                    # 5. Sync Variations (Link to Pattern)
                     if "variations" in sync_types and p_id:
                         variation_count = len(p.get("variations", []))
                         self.log(f"Syncing {variation_count} variations for pattern: {title}")
@@ -333,59 +463,28 @@ class AirtableUploader:
                                 v_fields = {
                                     "variation_title": v_title,
                                     "content": v.get("content", "")
+                                    # Note: base_folder removed - it's a Single Select field
                                 }
                                 
                                 # Add lens field if lens_name is available
                                 if lens_name:
                                     v_fields["lens"] = lens_name
                                 
-                                # Add base_folder field
-                                if base_folder:
-                                    v_fields["base_folder"] = base_folder
+                                # CRITICAL: Link variation to its pattern
+                                # Check if patterns field exists, otherwise use pattern_id or similar
+                                if p_id:
+                                    # Try different possible field names for pattern linking
+                                    v_fields["pattern"] = [p_id]  # Array format for linked records
+
                                 
-                                # Add pattern linking if --sync flag is enabled
-                                if enable_linking and p_id:
-                                    # Try different field names for pattern linking
-                                    # We'll test these in order: patterns, pattern, Pattern
-                                    v_fields["patterns"] = [p_id]  # Try as array of record IDs first
-                                    
-                                # Debug: Log what fields we're trying to send
-                                self.log(f"Creating variation '{v_title}' with fields: {list(v_fields.keys())}")
-                                result = self._create_or_update("variations", v_title, v_fields)
+                                # Debug: Log what fields we're trying to send\n                                self.log(f\"Creating variation '{v_title}' with fields: {list(v_fields.keys())}\")\n                                result = self._create_or_update(\"variations\", v_title, v_fields)
                                 if result:
                                     variations_synced += 1
-                                    link_status = "with pattern link" if enable_linking else "without pattern link"
-                                    self.log(f"Successfully synced variation '{v_title}' to pattern '{title}' ({link_status})")
+                                    self.log(f"Linked variation '{v_title}' to pattern '{title}'")
                         
                         self.log(f"Successfully synced {variations_synced}/{variation_count} variations for pattern: {title}")
-        
-        # 4. Sync Sources (if requested)  
-        if "sources" in sync_types:
-            self.log("Syncing Sources...")
-            for source in data.get("sources", []):
-                source_title = source.get("source")
-                base_folder = source.get("base_folder")
-                
-                if source_title:
-                    fields = {
-                        "source_title": source_title,
-                        "source_type": source.get("type"),
-                        "base_folder": base_folder,
-                    }
                     
-                    # Add pattern linking if enabled and patterns exist
-                    if enable_linking and source.get("patterns"):
-                        pattern_ids = []
-                        for pattern_title in source.get("patterns", []):
-                            pattern_id = self.get_record_id("patterns", pattern_title)
-                            if pattern_id:
-                                pattern_ids.append(pattern_id)
-                        if pattern_ids:
-                            fields["patterns"] = pattern_ids
-                    
-                    self._create_or_update("sources", source_title, fields)
-        
-        # Log sync summary
+                    pattern_id_counter += 1        # Log sync summary
         total_records = sum(len(cache) for cache in self.record_map.values())
         self.log(f"Sync complete. Total records in cache: {total_records}")
         for table_key, cache in self.record_map.items():
