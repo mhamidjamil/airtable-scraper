@@ -81,6 +81,10 @@ class AirtableUploader:
         if "variations" in sync_types and "patterns" not in tables_to_fetch:
             tables_to_fetch.append("patterns")
             self.log("Also fetching patterns (needed for variation linking)")
+
+        if "sources" in sync_types and "patterns" not in tables_to_fetch:
+            tables_to_fetch.append("patterns")
+            self.log("Also fetching patterns (needed for source linking)")
         
         # Fetch each required table
         if "lenses" in tables_to_fetch:
@@ -294,11 +298,22 @@ class AirtableUploader:
                                     "content": source_content,  # The actual source text goes in content field
                                     "lense": lens_name,        # Note: 'lense' as per your table structure  
                                     "base_folder": base_folder
-                                    # Note: Patterns relation will be set when patterns are synced
                                 }
+                                
+                                # Try to link to pattern if it exists
+                                pattern_title = pattern.get("title")
+                                if pattern_title:
+                                    p_id = self.record_map["patterns"].get(self.normalize_for_matching(pattern_title))
+                                    if p_id:
+                                        fields["Patterns"] = [p_id]
                                 
                                 # Use unique record name to ensure separate records
                                 result = self._create_or_update("sources", record_name, fields)
+                                
+                                # Update cache with content hash so pattern linking can find this new source
+                                if result:
+                                    self.record_map["sources"][content_hash] = result
+                                    
                                 sources_synced += 1
                                 source_count_for_pattern += 1
                                 self.log(f"Created source #{sources_synced}: {source_name} for pattern {pattern_count} (lense: {lens_name})")
