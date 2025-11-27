@@ -1,122 +1,57 @@
-# Airtable Scraper - AI Context & Developer Guide
+# AI Context & Generic Extraction Rules
 
-## Project Overview
-This tool extracts structured data (Patterns, Variations, Metas, Lenses) from Microsoft Word (`.docx`) files and syncs it to Airtable. It is designed to be idempotent (avoiding duplicates) and robust to various formatting inconsistencies.
+This document defines the generic rules and project structure for the Airtable Scraper. It serves as the source of truth for AI agents and automated processes working on this codebase.
 
-## Core Logic Rules
+## 1. Project Structure
+The project is designed to be modular and scalable.
+- **`main.py`**: Entry point. Handles argument parsing and orchestrates the extraction and sync process. Supports recursive folder discovery.
+- **`modules/`**: Contains core logic.
+    - `data_extractor.py`: Orchestrates data extraction from files.
+    - `airtable_uploader.py`: Handles data synchronization with Airtable.
+- **`extraction_rules/`**: Contains specific regex and parsing logic.
+    - `variation_rules.py`: Rules for extracting Variations.
+    - `source_rules.py`: Rules for extracting Sources.
+- **`config/`**: Configuration settings.
 
-### 1. Variation Extraction & Linking
-**CRITICAL UNDERSTANDING**: Each document typically contains **10 patterns** but **only Pattern 1 has variations**. All 10 variations in a document belong to Pattern 1 unless explicitly stated otherwise.
+## 2. Extraction Logic
 
-**Document Structure Pattern:**
-```
-Pattern 1: MAIN PATTERN TITLE
-Pattern 2: SECOND PATTERN TITLE  
-...
-Pattern 10: TENTH PATTERN TITLE
+### A. Variations
+**Goal**: Extract exactly 10 variations per file.
+**Linking Logic**:
+1.  **Explicit Mode**: If *any* variation in a file explicitly references a pattern (e.g., "Variation 9 – PATTERN 9..."), we assume a **1-to-1 mapping** for the entire file.
+    -   Variation 1 -> Pattern 1
+    -   Variation 2 -> Pattern 2
+    -   ...
+    -   Variation 10 -> Pattern 10
+2.  **Implicit Mode**: If *no* variations in a file reference a pattern, **ALL** variations are linked to **Pattern 1**.
 
-Part II: Ten Variations of Pattern #1
-— FIRST VARIATION TITLE
-— SECOND VARIATION TITLE
-...
-0 — TENTH VARIATION TITLE (0 = Variation 10)
-```
+**Regex Formats Supported**:
+-   `Variation X – PATTERN Y: Title` (Explicit)
+-   `– PATTERN Y: Title` (Implicit Variation, Explicit Pattern)
+-   `Variation X – Title`
+-   `X – Title` (where 0 = 10)
+-   `– TITLE IN CAPS` (Implicit Dash Title)
 
-**Linking Logic:**
-*   **Default Rule**: If a variation does not explicitly mention a Pattern number, it **ALWAYS** belongs to **Pattern 1**.
-*   **Explicit Rule**: If a variation header contains "PATTERN X", it belongs to **Pattern X**.
-*   **Expected Outcome**: Pattern 1 gets 10 variations, Patterns 2-10 get 0 variations each.
+### B. Metas
+**Goal**: Extract metadata from the `METAS` folder.
+**Linking Logic**:
+-   **All-to-All**: All Meta files found in the `METAS` folder of a project are linked to **EVERY** Pattern found in that same project.
+-   Example: If `PAULA` has 5 Metas and 10 Patterns, each of the 10 Patterns will be linked to all 5 Metas.
 
-**Variation Formats (Must Handle All):**
-1.  `– ONE FIELD, MANY SCALES` → **Pattern 1** (Implicit)
-2.  `- THE SOIL REMEMBERS` → **Pattern 1** (Implicit, standard dash)
-3.  `VARIATION 6 – INNER CLIMATE, OUTER CLIMATE` → **Pattern 1** (Explicit Var Num, Implicit Pattern)
-4.  `0 — SUPERLOVE AS COSMIC IMPERATIVE` → **Variation 10** (0 equals 10), **Pattern 1**
-5.  `Variation 9 – PATTERN 9: SPEAKING IN SEEDS` → **Pattern 9** (Explicit Pattern Reference)
+### C. Sources
+**Goal**: Extract sources from Pattern descriptions.
+-   Sources are parsed using `SourceExtractor`.
+-   They are linked to the Pattern they were found in.
+-   They are stored in the `Sources` table with a composite key to prevent duplicates.
 
-**Key Regex Requirements:**
-*   Must handle different dash types: hyphen (`-`), en-dash (`–`), em-dash (`—`), minus (`−`).
-*   Must handle implicit uppercase titles with punctuation (e.g., "EARTH'S FEVER").
-*   Must handle "0" as "10".
-*   Must handle mixed case variations like "Variation 6 —" or "VARIATION 6 –".
+## 3. Airtable Sync
+-   **Selective Sync**: Can sync specific tables (`--patterns`, `--variations`, etc.) or all.
+-   **Relationships**:
+    -   Patterns -> Lenses (Many-to-One)
+    -   Patterns -> Sources (Many-to-Many)
+    -   Patterns -> Metas (Many-to-Many)
+    -   Patterns -> Variations (One-to-Many)
 
-### 2. Airtable Syncing (Idempotency) - CRITICAL SECTION
-**NEVER CREATE DUPLICATES** - This is the most common failure point.
-
-**Pre-Sync Process:**
-1. **Always** fetch all existing records from all tables before syncing
-2. Build a normalized cache mapping `{clean_key: record_id}`
-3. Use case-insensitive, whitespace-trimmed matching
-
-**Matching Logic:**
-*   **Patterns**: Match by normalized `pattern_title`
-*   **Variations**: Match by normalized `variation_title` 
-*   **Lenses**: Match by normalized `lens_name`
-*   **Sources**: Match by normalized `source_name`
-*   **Metas**: Match by normalized `title`
-
-**Normalization Rules:**
-```python
-def normalize_for_matching(text):
-    if not text: return ""
-    return text.strip().lower()
-```
-
-**Action Logic:**
-*   If record exists → **Update** (Patch) to ensure data is fresh
-*   If record missing → **Create** (Post)
-*   **Always** update the cache after creating new records
-
-### 3. Expected Data Structure
-Each document should produce:
-- 1 Lens record
-- 10 Pattern records (for that document)
-- ~10 Variation records (all linked to Pattern 1 typically)
-- Variable Meta records 
-- Variable Source records
-
-Total per BIOME folder (5 documents): ~50 Patterns, ~50 Variations, 5 Lenses
-
-## Directory Structure
-*   `modules/data_extractor.py`: Handles parsing DOCX files.
-*   `modules/airtable_uploader.py`: Handles API logic and syncing.
-*   `json_data/`: Intermediate storage for extracted data.
-*   `logs/`: Execution logs.
-*   `config/settings.py`: Configuration and Airtable credentials.
-
-## Common Pitfalls (Do Not Repeat)
-
-### Variation Extraction Issues
-*   **Missing Variations**: Often caused by regex not catching titles with punctuation (e.g., "EARTH'S") or different dash styles.
-*   **Wrong Pattern Assignment**: Remember most variations go to Pattern 1 unless explicitly stated.
-*   **Number Handling**: "0" should be converted to "10".
-
-### Duplicate Upload Issues  
-*   **Case Sensitivity**: "BELOVED BANG" vs "beloved bang" should match.
-*   **Whitespace**: "PATTERN TITLE " vs "PATTERN TITLE" should match.
-*   **Cache Not Updated**: After creating a record, update the local cache.
-*   **Incomplete Fetching**: Make sure to fetch ALL pages of existing records.
-
-### Code Structure Issues
-*   **Relative Imports**: Always use absolute imports (e.g., `from config import settings`) to avoid execution errors.
-*   **Missing Error Handling**: All API calls should have try/catch blocks.
-*   **Insufficient Logging**: Log all create/update operations for debugging.
-
-## Debug Commands
-```bash
-# Test extraction only
-python test_variations.py
-
-# Test full sync (requires Airtable credentials)
-python main.py
-
-# Analyze extraction results
-python analyze_variations.py
-```
-
-## Airtable Schema Expected
-- **Patterns**: pattern_title, overview, choice, base_folder, lens (link), sources (link)
-- **Variations**: variation_title, variation_number, content, linked_pattern (link)  
-- **Lenses**: lens_name, content
-- **Sources**: source_name
-- **Metas**: title, subtitle, content, base_folder
+## 4. Future Improvements
+-   Always prefer generic regex patterns over hardcoded logic.
+-   Maintain separation of concerns: `extraction_rules` for parsing, `modules` for flow.

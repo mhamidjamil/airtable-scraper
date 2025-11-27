@@ -82,18 +82,10 @@ class VariationExtractor:
         candidate = candidate.strip()
         
         # Length check
-        if len(candidate) <= self.min_title_length or len(candidate) >= self.max_title_length:
+        if not candidate or len(candidate) > self.max_title_length:
             return False
         
         # Must be all uppercase
-        if not candidate.isupper():
-            return False
-        
-        # Should not start with section headers
-        for header in self.section_headers:
-            if candidate.lower().startswith(header):
-                return False
-        
         return True
     
     def validate_implicit_title(self, candidate: str) -> bool:
@@ -109,21 +101,10 @@ class VariationExtractor:
         candidate = candidate.strip()
         
         # Length check
-        if len(candidate) >= self.max_title_length:
+        if not candidate or len(candidate) > self.max_title_length:
             return False
         
-        # Should not start with common content words
-        candidate_lower = candidate.lower()
-        for word in self.content_start_words:
-            if candidate_lower.startswith(word):
-                return False
-        
-        # Should have some uppercase content (indicating it's a title)
-        if not (candidate.isupper() or 
-                any(c.isupper() for c in candidate[:10]) or 
-                re.search(r'[A-Z]{2,}', candidate)):
-            return False
-        
+        # Accept everything else!
         return True
     
     def check_stop_condition(self, text: str) -> bool:

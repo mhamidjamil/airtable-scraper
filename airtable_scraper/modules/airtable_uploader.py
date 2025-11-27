@@ -332,8 +332,8 @@ class AirtableUploader:
                 self._create_or_update("metas", m.get("title"), {
                     "title": m.get("title"),
                     "subtitle": m.get("subtitle"),
-                    "content": m.get("content"),
-                    "base_folder": m.get("base_folder")
+                    "content": m.get("content")
+                    # Note: base_folder removed - it's a Single Select field in Airtable
                 })
 
         # 4. Sync Patterns (and link to Lens/Source)
@@ -402,6 +402,7 @@ class AirtableUploader:
                         # We need to find the meta that has the same base_folder as this pattern
                         meta_ids = []
                         for doc_meta in data.get("metas", []):
+                            # Link ALL metas from the same base_folder
                             if doc_meta.get("base_folder") == base_folder:
                                 meta_title = doc_meta.get("title")
                                 if meta_title:
@@ -413,7 +414,9 @@ class AirtableUploader:
                             fields["Metas"] = meta_ids
                             self.log(f"Linked pattern '{title}' to {len(meta_ids)} meta(s) (base_folder: {base_folder})")
                         else:
-                            self.log(f"Warning: No meta found for pattern '{title}' with base_folder '{base_folder}'", "warning")
+                            # Only warn if we expected metas but found none
+                            if data.get("metas"):
+                                self.log(f"Warning: No matching meta records found for pattern '{title}' (base_folder: {base_folder})", "warning")
                         
                         # Get variation IDs for this pattern
                         pattern_variation_ids = []
@@ -455,17 +458,22 @@ class AirtableUploader:
                             if v_title:  # Only sync variations with titles
                                 v_fields = {
                                     "variation_title": v_title,
-                                    "content": v.get("content", ""),
-                                    "base_folder": base_folder
+                                    "content": v.get("content", "")
+                                    # Note: base_folder removed - it's a Single Select field
                                 }
                                 
                                 # Add lens field if lens_name is available
                                 if lens_name:
                                     v_fields["lens"] = lens_name
                                 
+                                # CRITICAL: Link variation to its pattern
+                                if p_id:
+                                    v_fields["Patterns"] = [p_id]
+                                
                                 result = self._create_or_update("variations", v_title, v_fields)
                                 if result:
                                     variations_synced += 1
+                                    self.log(f"Linked variation '{v_title}' to pattern '{title}'")
                         
                         self.log(f"Successfully synced {variations_synced}/{variation_count} variations for pattern: {title}")
                     

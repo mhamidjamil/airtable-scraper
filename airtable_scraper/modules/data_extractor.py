@@ -118,12 +118,36 @@ class DataExtractor:
         try:
             doc = docx.Document(file_path)
             paras = [p.text.strip() for p in doc.paragraphs if p.text.strip()]
-            if not paras: return None
+            if not paras:
+                return None
+            
+            # Title: from filename (without extension)
+            title = Path(file_path).stem
+            
+            # Subtitle: first paragraph (skip if it's the same as title)
+            subtitle = ""
+            content_start_idx = 0
+            
+            if paras:
+                # Check if first paragraph is the title (repeated)
+                if paras[0].strip() == title.strip():
+                    # Skip the title, subtitle is the next paragraph
+                    if len(paras) > 1:
+                        subtitle = paras[1]
+                        content_start_idx = 2
+                else:
+                    # First paragraph is the subtitle
+                    subtitle = paras[0]
+                    content_start_idx = 1
+            
+            # Content: everything after subtitle
+            content_paras = paras[content_start_idx:]
+            content = self.clean_text("\n\n".join(content_paras))
             
             return {
-                "title": Path(file_path).stem,
-                "subtitle": paras[0],
-                "content": self.clean_text("\n\n".join(paras)),
+                "title": title,
+                "subtitle": subtitle,
+                "content": content,
                 "base_folder": base_folder
             }
         except Exception as e:
@@ -131,7 +155,7 @@ class DataExtractor:
             return None
 
     # Main Processing Method
-    def process_folder(self, folder_input: str) -> Dict:
+    def process_folder(self, folder_input: str, extract_types: List[str] = None) -> Dict:
         # Handle both absolute paths and relative names
         if os.path.isabs(folder_input):
             folder_path = Path(folder_input)
@@ -152,86 +176,128 @@ class DataExtractor:
             "documents": []
         }
 
+        # Determine what to extract
+        if extract_types is None:
+            extract_types = ['metas', 'lenses', 'sources', 'patterns', 'variations']
+            
+        should_extract_metas = 'metas' in extract_types
+        should_extract_docs = any(t in extract_types for t in ['lenses', 'sources', 'patterns', 'variations'])
+
         # 1. Extract METAS
-        metas_dir = folder_path / "METAS"
-        if metas_dir.exists():
-            for f in metas_dir.glob("*.docx"):
-                if f.name.startswith("~$"): continue
-                meta = self.extract_metas(str(f), folder_name)
-                if meta: extracted_data["metas"].append(meta)
+        if should_extract_metas:
+            metas_dir = folder_path / "METAS"
+            if metas_dir.exists():
+                self.log(f"Found METAS directory: {metas_dir}")
+                for f in metas_dir.glob("*.docx"):
+                    if f.name.startswith("~$"): continue
+                    meta = self.extract_metas(str(f), folder_name)
+                    if meta: 
+                        extracted_data["metas"].append(meta)
+                        self.log(f"Extracted Meta: {meta['title']}")
+            else:
+                self.log(f"No METAS directory found in {folder_path}", "warning")
 
         # 2. Extract Documents (Patterns, Sources, Lenses, Variations)
-        step2_dir = folder_path / "STEP 2"
-        if not step2_dir.exists():
-            step2_dir = folder_path / "Step 2"
-            
-        target_dir = step2_dir if step2_dir.exists() else folder_path
-        
-        for f in target_dir.glob("*.docx"):
-            if f.name.startswith("~$"): continue
-            
-            try:
-                doc = docx.Document(str(f))
-                paras = doc.paragraphs
+        if should_extract_docs:
+            step2_dir = folder_path / "STEP 2"
+            if not step2_dir.exists():
+                step2_dir = folder_path / "Step 2"
                 
-                # Extract components
-                summary, has_summary = self.extract_summary(paras)
-                patterns = self.extract_patterns(paras)
-                variations = self.extract_variations(paras, f.name)
+            target_dir = step2_dir if step2_dir.exists() else folder_path
+            
+            for f in target_dir.glob("*.docx"):
+                if f.name.startswith("~$"): continue
                 
-                if not patterns or not has_summary:
-                    self.log(f"Skipping {f.name}: Missing patterns or summary", "warning")
-                    continue
+                try:
+                    doc = docx.Document(str(f))
+                    paras = doc.paragraphs
+                    
+                    # Extract components
+                    summary, has_summary = self.extract_summary(paras)
+                    patterns = self.extract_patterns(paras)
+                    variations = self.extract_variations(paras, f.name)
+                    
+                    if not patterns or not has_summary:
+                        self.log(f"Skipping {f.name}: Missing patterns or summary", "warning")
+                        continue
 
-                # Link variations to patterns
-                p_map = {p["pattern_number"]: p for p in patterns}
-                for v in variations:
-                    # Logic: Try pattern ref, else fallback to first pattern (common in single-pattern docs)
-                    target = p_map.get(v["pattern_reference"], patterns[0])
-                    target["variations"].append({
-                        "variation_number": v["variation_number"],
-                        "title": v["title"],
-                        "content": v["content"]
+                    # Link variations to patterns
+                    has_explicit_ref = any(v["pattern_reference"] != 1 for v in variations)
+                    
+                    if has_explicit_ref:
+                        self.log(f"Explicit pattern references detected in {f.name}. Using 1-to-1 mapping.")
+                        p_map = {p["pattern_number"]: p for p in patterns}
+                        
+                        for v in variations:
+                            target_pattern_num = v["variation_number"]
+                            target = p_map.get(target_pattern_num)
+                            
+                            if target:
+                                target["variations"].append({
+                                    "variation_number": v["variation_number"],
+                                    "title": v["title"],
+                                    "content": v["content"]
+                                })
+                                self.log(f"Linked Variation {v['variation_number']} -> Pattern {target_pattern_num}")
+                            else:
+                                # Fallback: Link to Pattern 1 if no matching pattern number
+                                if patterns:
+                                    fallback = patterns[0]
+                                    fallback["variations"].append({
+                                        "variation_number": v["variation_number"],
+                                        "title": v["title"],
+                                        "content": v["content"]
+                                    })
+                                    self.log(f"Warning: Variation {v['variation_number']} has no matching Pattern {target_pattern_num}. Linked to Pattern 1 as fallback.", "warning")
+                    else:
+                        self.log(f"No explicit pattern references in {f.name}. Linking ALL to Pattern 1.")
+                        if patterns:
+                            target = patterns[0]
+                            for v in variations:
+                                target["variations"].append({
+                                    "variation_number": v["variation_number"],
+                                    "title": v["title"],
+                                    "content": v["content"]
+                                })
+                            self.log(f"Linked {len(variations)} variations to Pattern 1: {target['title'][:30]}...")
+
+                    # d: Lens Extractor
+                    lens_name = f.stem
+                    
+                    # b: Source Extractor
+                    all_sources = []
+                    for pattern in patterns:
+                        pattern_sources = self.parse_sources(pattern.get("source", ""), lens_name, folder_name)
+                        all_sources.extend(pattern_sources)
+                        pattern["parsed_sources"] = pattern_sources
+
+                    extracted_data["documents"].append({
+                        "lens": lens_name,
+                        "base_folder": folder_name,
+                        "file_path": str(f),
+                        "summary": summary,
+                        "patterns": patterns,
+                        "sources": all_sources
                     })
-                    self.log(f"Linked variation {v['variation_number']} to pattern {target['pattern_number']}: {target['title'][:30]}...")
-
-                # d: Lens Extractor (Lens is the document concept/filename)
-                lens_name = f.stem
-                
-                # b: Source Extractor - Extract and parse multiple sources
-                all_sources = []
-                for pattern in patterns:
-                    pattern_sources = self.parse_sources(pattern.get("source", ""), lens_name, folder_name)
-                    all_sources.extend(pattern_sources)
-                    # Store parsed sources in pattern for reference
-                    pattern["parsed_sources"] = pattern_sources
-
-                extracted_data["documents"].append({
-                    "lens": lens_name,
-                    "base_folder": folder_name,
-                    "file_path": str(f),
-                    "summary": summary,
-                    "patterns": patterns,
-                    "sources": all_sources  # Add extracted sources
-                })
-                
-            except Exception as e:
-                self.log(f"Error processing {f.name}: {str(e)}", "error")
+                    
+                except Exception as e:
+                    self.log(f"Error processing {f.name}: {str(e)}", "error")
 
         # Save to JSON
         out_file = settings.DATA_DIR / f"{folder_name.lower()}_data.json"
         with open(out_file, 'w', encoding='utf-8') as f:
             json.dump(extracted_data, f, indent=2, ensure_ascii=False)
-            
+        
         self.log(f"Extraction complete. Saved to {out_file}")
+        
         # Log extraction summary
         doc_count = len(extracted_data.get("documents", []))
         meta_count = len(extracted_data.get("metas", []))
         total_patterns = sum(len(doc.get("patterns", [])) for doc in extracted_data.get("documents", []))
         total_variations = sum(len(pattern.get("variations", [])) 
-                              for doc in extracted_data.get("documents", []) 
-                              for pattern in doc.get("patterns", []))
-        
+                          for doc in extracted_data.get("documents", []) 
+                          for pattern in doc.get("patterns", []))
+
         self.log(f"Extraction Summary - Documents: {doc_count}, Patterns: {total_patterns}, Variations: {total_variations}, Metas: {meta_count}")
-        
+
         return extracted_data

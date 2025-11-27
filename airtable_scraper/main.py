@@ -148,9 +148,9 @@ def main():
         logger.info("-" * 30)
         logger.info(f"Processing Project: {project_path.name}")
         
-        extracted_data = extractor.process_folder(str(project_path))
+        extracted_data = extractor.process_folder(str(project_path), extract_types=sync_types)
         
-        if not extracted_data or not extracted_data.get("documents"):
+        if not extracted_data or (not extracted_data.get("documents") and not extracted_data.get("metas")):
             logger.warning(f"No data extracted for {project_path.name}. Skipping sync.")
             continue
 
