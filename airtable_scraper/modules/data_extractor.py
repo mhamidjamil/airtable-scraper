@@ -131,13 +131,19 @@ class DataExtractor:
             return None
 
     # Main Processing Method
-    def process_folder(self, folder_name: str) -> Dict:
-        folder_path = settings.SOURCE_DIR / folder_name
+    def process_folder(self, folder_input: str) -> Dict:
+        # Handle both absolute paths and relative names
+        if os.path.isabs(folder_input):
+            folder_path = Path(folder_input)
+        else:
+            folder_path = settings.SOURCE_DIR / folder_input
+
         if not folder_path.exists():
             self.log(f"Folder not found: {folder_path}", "error")
             return {}
 
-        self.log(f"Processing folder: {folder_name}")
+        folder_name = folder_path.name
+        self.log(f"Processing folder: {folder_name} (Path: {folder_path})")
         
         extracted_data = {
             "base_folder": folder_name,
@@ -156,6 +162,9 @@ class DataExtractor:
 
         # 2. Extract Documents (Patterns, Sources, Lenses, Variations)
         step2_dir = folder_path / "STEP 2"
+        if not step2_dir.exists():
+            step2_dir = folder_path / "Step 2"
+            
         target_dir = step2_dir if step2_dir.exists() else folder_path
         
         for f in target_dir.glob("*.docx"):

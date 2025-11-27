@@ -3,6 +3,7 @@ import sys
 import os
 import argparse
 from datetime import datetime
+from pathlib import Path
 from config import settings
 from modules.data_extractor import DataExtractor
 from modules.airtable_uploader import AirtableUploader
@@ -72,6 +73,46 @@ def determine_sync_types(args):
     
     return sync_types
 
+def find_project_folders(start_path_str: str) -> list[Path]:
+    """
+    Identify project folders to process.
+    Logic:
+    1. If start_path has 'STEP 2' (case-insensitive) or .docx files, it's a project.
+    2. Else, check immediate subdirectories for the same criteria.
+    """
+    # Resolve path
+    if os.path.isabs(start_path_str):
+        start_path = Path(start_path_str)
+    else:
+        start_path = settings.SOURCE_DIR / start_path_str
+        
+    if not start_path.exists():
+        logger.error(f"Path not found: {start_path}")
+        return []
+
+    projects = []
+    
+    def is_project(p: Path) -> bool:
+        # Check for STEP 2 folder
+        if (p / "STEP 2").exists() or (p / "Step 2").exists():
+            return True
+        # Check for docx files (excluding temp files)
+        # We need to be careful not to count empty folders or folders with just other stuff
+        # But user said "if not then we use the subfolder" implying direct file presence
+        has_files = any(f for f in p.glob("*.docx") if not f.name.startswith("~$"))
+        return has_files
+
+    if is_project(start_path):
+        projects.append(start_path)
+    else:
+        # Check subdirectories
+        logger.info(f"Checking subdirectories of {start_path} for projects...")
+        for child in start_path.iterdir():
+            if child.is_dir() and is_project(child):
+                projects.append(child)
+                
+    return projects
+
 def main():
     # Parse command line arguments
     args = parse_arguments()
@@ -92,32 +133,44 @@ def main():
 
     # 1. Initialize Modules
     extractor = DataExtractor(log_handler=logger)
-
-    # 2. Extract Data
-    logger.info(f"Extracting data from folder: {args.folder}")
-    extracted_data = extractor.process_folder(args.folder)
     
-    if not extracted_data or not extracted_data.get("documents"):
-        logger.error("No data extracted. Aborting.")
+    # 2. Identify Project Folders
+    project_folders = find_project_folders(args.folder)
+    
+    if not project_folders:
+        logger.warning(f"No valid project folders found in/at: {args.folder}")
         return
 
-    # 3. Upload to Airtable (unless extract-only mode)
-    if not args.extract_only:
-        logger.info("Initializing Airtable Sync...")
-        uploader = AirtableUploader(log_handler=logger)
+    logger.info(f"Found {len(project_folders)} project(s) to process: {[p.name for p in project_folders]}")
+
+    # 3. Process Each Project
+    for project_path in project_folders:
+        logger.info("-" * 30)
+        logger.info(f"Processing Project: {project_path.name}")
         
-        try:
-            # Read already uploaded data and sync selectively
-            uploader.fetch_existing_records(sync_types)
-            uploader.sync_data(extracted_data, sync_types)
+        extracted_data = extractor.process_folder(str(project_path))
+        
+        if not extracted_data or not extracted_data.get("documents"):
+            logger.warning(f"No data extracted for {project_path.name}. Skipping sync.")
+            continue
+
+        # 4. Upload to Airtable (unless extract-only mode)
+        if not args.extract_only:
+            logger.info(f"Initializing Airtable Sync for {project_path.name}...")
+            uploader = AirtableUploader(log_handler=logger)
             
-        except Exception as e:
-            logger.error(f"Upload failed: {str(e)}")
-            import traceback
-            logger.error(traceback.format_exc())
-            return
-    else:
-        logger.info("Skipping Airtable sync (extract-only mode)")
+            try:
+                # Read already uploaded data and sync selectively
+                uploader.fetch_existing_records(sync_types)
+                uploader.sync_data(extracted_data, sync_types)
+                
+            except Exception as e:
+                logger.error(f"Upload failed for {project_path.name}: {str(e)}")
+                import traceback
+                logger.error(traceback.format_exc())
+        else:
+            logger.info(f"Skipping Airtable sync for {project_path.name} (extract-only mode)")
+
 
     logger.info("="*50)
     logger.info("PROJECT EXECUTION COMPLETE")
