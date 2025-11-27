@@ -1,0 +1,45 @@
+{
+  "id": "tblUqNrPkLSAs85FJ",
+  "name": "Variations",
+  "primaryFieldId": "fldGl8508sxyME08K",
+  "fields": [
+    {
+      "type": "singleLineText",
+      "id": "fldGl8508sxyME08K",
+      "name": "variation_title"
+    },
+    {
+      "type": "multilineText",
+      "id": "fldsKBY4PKtio82z4",
+      "name": "content"
+    },
+    {
+      "type": "multipleRecordLinks",
+      "options": {
+        "linkedTableId": "tblr0g3fl44aqwaa9",
+        "isReversed": false,
+        "prefersSingleRecordLink": true,
+        "inverseLinkFieldId": "fldMB9w9XRWnzLlm3"
+      },
+      "id": "fldz7YITnCEi44Hi0",
+      "name": "pattern_reference"
+    },
+    {
+      "type": "singleLineText",
+      "id": "fldhpTdim0DjxmyLl",
+      "name": "lens"
+    },
+    {
+      "type": "singleLineText",
+      "id": "fldjyXGjzjpc9hYTW",
+      "name": "base_folder"
+    }
+  ],
+  "views": [
+    {
+      "id": "viwfpXPQpuE396Dlb",
+      "name": "Grid view",
+      "type": "grid"
+    }
+  ]
+}

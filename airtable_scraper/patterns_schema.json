@@ -1,0 +1,78 @@
+{
+  "id": "tblr0g3fl44aqwaa9",
+  "name": "Patterns",
+  "primaryFieldId": "fldwns64Z1sA8f35w",
+  "fields": [
+    {
+      "type": "singleLineText",
+      "id": "fldwns64Z1sA8f35w",
+      "name": "pattern_title"
+    },
+    {
+      "type": "singleLineText",
+      "id": "fldykH9YKIUk23goj",
+      "name": "base_folder"
+    },
+    {
+      "type": "multipleRecordLinks",
+      "options": {
+        "linkedTableId": "tblWqnqjaqfCtCxHy",
+        "isReversed": false,
+        "prefersSingleRecordLink": true,
+        "inverseLinkFieldId": "fldSgqziExewT3qBl"
+      },
+      "id": "fldPLBkCc7LAKYOAU",
+      "name": "lens"
+    },
+    {
+      "type": "multipleRecordLinks",
+      "options": {
+        "linkedTableId": "tbluDgCv3ZjzcAVNB",
+        "isReversed": false,
+        "prefersSingleRecordLink": false,
+        "inverseLinkFieldId": "fld8WsblHNP5DWPPQ"
+      },
+      "id": "fldWvQGjw2LxSOKKc",
+      "name": "sources"
+    },
+    {
+      "type": "multilineText",
+      "id": "fld6UXNB61nieFQRr",
+      "name": "overview"
+    },
+    {
+      "type": "multilineText",
+      "id": "fld6gSnegbF6nI2cn",
+      "name": "choice"
+    },
+    {
+      "type": "multipleRecordLinks",
+      "options": {
+        "linkedTableId": "tblUqNrPkLSAs85FJ",
+        "isReversed": false,
+        "prefersSingleRecordLink": false,
+        "inverseLinkFieldId": "fldz7YITnCEi44Hi0"
+      },
+      "id": "fldMB9w9XRWnzLlm3",
+      "name": "variations"
+    },
+    {
+      "type": "multipleRecordLinks",
+      "options": {
+        "linkedTableId": "tblSnW7PSYZkesemj",
+        "isReversed": false,
+        "prefersSingleRecordLink": false,
+        "inverseLinkFieldId": "fldSZTc6JUMsuXN8p"
+      },
+      "id": "fldue02qYseLQ3Blq",
+      "name": "Metas"
+    }
+  ],
+  "views": [
+    {
+      "id": "viwoSwiYRssagB5Z9",
+      "name": "Grid view",
+      "type": "grid"
+    }
+  ]
+}

@@ -1,0 +1,40 @@
+{
+  "id": "tbluDgCv3ZjzcAVNB",
+  "name": "Sources",
+  "primaryFieldId": "fldNblswO88mtoXZV",
+  "fields": [
+    {
+      "type": "singleLineText",
+      "id": "fldNblswO88mtoXZV",
+      "name": "content"
+    },
+    {
+      "type": "multipleRecordLinks",
+      "options": {
+        "linkedTableId": "tblr0g3fl44aqwaa9",
+        "isReversed": false,
+        "prefersSingleRecordLink": false,
+        "inverseLinkFieldId": "fldWvQGjw2LxSOKKc"
+      },
+      "id": "fld8WsblHNP5DWPPQ",
+      "name": "Patterns"
+    },
+    {
+      "type": "singleLineText",
+      "id": "fldbv3QLSLopNZyI4",
+      "name": "lense"
+    },
+    {
+      "type": "singleLineText",
+      "id": "fldcP0uEL8DCAF5gD",
+      "name": "base_folder"
+    }
+  ],
+  "views": [
+    {
+      "id": "viwxFqk1rAKxdufrw",
+      "name": "Grid view",
+      "type": "grid"
+    }
+  ]
+}

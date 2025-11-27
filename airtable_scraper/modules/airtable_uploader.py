@@ -345,9 +345,8 @@ class AirtableUploader:
                                 
                                 # Add pattern linking if --sync flag is enabled
                                 if enable_linking and p_id:
-                                    # Try different field names for pattern linking
-                                    # We'll test these in order: patterns, pattern, Pattern
-                                    v_fields["patterns"] = [p_id]  # Try as array of record IDs first
+                                    # Use the correct field name from Airtable schema - array format
+                                    v_fields["pattern_reference"] = [p_id]
                                     
                                 # Debug: Log what fields we're trying to send
                                 self.log(f"Creating variation '{v_title}' with fields: {list(v_fields.keys())}")
@@ -363,15 +362,19 @@ class AirtableUploader:
         if "sources" in sync_types:
             self.log("Syncing Sources...")
             for source in data.get("sources", []):
-                source_title = source.get("source")
+                source_content = source.get("source")  # This is the content
                 base_folder = source.get("base_folder")
+                lens_name = source.get("lens")
                 
-                if source_title:
+                if source_content:
                     fields = {
-                        "source_title": source_title,
-                        "source_type": source.get("type"),
+                        "content": source_content,  # Primary field
                         "base_folder": base_folder,
                     }
+                    
+                    # Add lens field if available
+                    if lens_name:
+                        fields["lense"] = lens_name  # Note: correct field name is "lense" not "lens"
                     
                     # Add pattern linking if enabled and patterns exist
                     if enable_linking and source.get("patterns"):
@@ -381,9 +384,9 @@ class AirtableUploader:
                             if pattern_id:
                                 pattern_ids.append(pattern_id)
                         if pattern_ids:
-                            fields["patterns"] = pattern_ids
+                            fields["Patterns"] = pattern_ids  # Correct field name with capital P
                     
-                    self._create_or_update("sources", source_title, fields)
+                    self._create_or_update("sources", source_content, fields)
         
         # Log sync summary
         total_records = sum(len(cache) for cache in self.record_map.values())

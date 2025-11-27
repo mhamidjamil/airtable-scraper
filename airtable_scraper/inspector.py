@@ -1,212 +1,300 @@
+#!/usr/bin/env python3
 """
-Data Extraction Inspector
-=========================
-
-This script extracts data from DOCX files and creates detailed JSON logs
-for verification BEFORE uploading to Airtable.
-
-Usage:
-    python inspector.py --folder "path/to/folder"
+Enhanced Data Inspector - Uses centralized extraction logic to analyze data before syncing to Airtable
+This inspector helps you validate extraction results and identify any missing data
 """
 
 import os
 import sys
 import json
-import logging
+import argparse
 from pathlib import Path
 from datetime import datetime
+from typing import Dict, List
 
-# Add parent directory to path to import modules
-sys.path.insert(0, str(Path(__file__).parent))
+# Add parent directory to path for imports
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from config import settings
 from modules.data_extractor import DataExtractor
 
 
-def setup_logging():
-    """Setup logging configuration"""
-    log_dir = Path(__file__).parent / "logs"
-    log_dir.mkdir(exist_ok=True)
+class DataInspector:
+    """Inspector that uses centralized extraction logic to analyze data"""
     
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    log_file = log_dir / f"inspector_{timestamp}.log"
-    
-    logging.basicConfig(
-        level=logging.INFO,
-        format='%(asctime)s [%(levelname)s] %(message)s',
-        handlers=[
-            logging.FileHandler(log_file, encoding='utf-8'),
-            logging.StreamHandler()
-        ]
-    )
-    
-    return logging.getLogger(__name__), log_file
-
-
-def create_inspection_report(data: dict, folder_name: str, log_dir: Path):
-    """
-    Create a detailed JSON inspection report
-    
-    Order: Metas -> Lenses -> Sources -> Patterns -> Variations
-    """
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    report_file = log_dir / f"inspection_{folder_name}_{timestamp}.json"
-    
-    report = {
-        "folder": folder_name,
-        "timestamp": timestamp,
-        "summary": {
-            "total_metas": len(data.get("metas", [])),
-            "total_lenses": 0,
-            "total_sources": 0,
-            "total_patterns": 0,
-            "total_variations": 0
-        },
-        "details": {
-            "metas": [],
-            "lenses": [],
-            "sources": [],
-            "patterns": [],
-            "variations": []
-        }
-    }
-    
-    # 1. METAS
-    for meta in data.get("metas", []):
-        report["details"]["metas"].append({
-            "title": meta.get("title"),
-            "subtitle": meta.get("subtitle", "")[:100] + "..." if len(meta.get("subtitle", "")) > 100 else meta.get("subtitle", ""),
-            "content_length": len(meta.get("content", "")),
-            "base_folder": meta.get("base_folder")
-        })
-    
-    # 2. LENSES, SOURCES, PATTERNS, VARIATIONS (from documents)
-    for doc in data.get("documents", []):
-        lens_name = doc.get("lens")
+    def __init__(self):
+        self.extractor = DataExtractor()
         
-        # Count lenses
-        if lens_name:
-            report["summary"]["total_lenses"] += 1
-            report["details"]["lenses"].append({
-                "name": lens_name,
-                "patterns_count": len(doc.get("patterns", []))
+    def inspect_folder(self, folder_path: str, extract_types: List[str] = None) -> Dict:
+        """
+        Inspect extraction results from a folder using centralized logic
+        
+        Args:
+            folder_path: Path to folder to inspect  
+            extract_types: List of data types to extract and inspect
+            
+        Returns:
+            Dict with inspection results and recommendations
+        """
+        print(f"🔍 INSPECTING FOLDER: {folder_path}")
+        print("=" * 60)
+        
+        # Use centralized extractor
+        extraction_data = self.extractor.process_folder(folder_path, extract_types)
+        
+        # Analyze extraction results
+        inspection_results = self._analyze_extraction(extraction_data, folder_path)
+        
+        # Generate recommendations
+        recommendations = self._generate_recommendations(inspection_results)
+        
+        # Create full inspection report
+        report = {
+            "inspection_timestamp": datetime.now().isoformat(),
+            "folder_path": folder_path,
+            "extraction_data": extraction_data,
+            "analysis": inspection_results,
+            "recommendations": recommendations,
+            "ready_for_sync": self._check_sync_readiness(inspection_results)
+        }
+        
+        # Display results
+        self._display_inspection_results(inspection_results, recommendations)
+        
+        return report
+    
+    def _analyze_extraction(self, data: Dict, folder_path: str) -> Dict:
+        """Analyze the extracted data for completeness and quality"""
+        
+        documents = data.get("documents", [])
+        metas = data.get("metas", [])
+        
+        # Count totals
+        total_patterns = sum(len(doc.get("patterns", [])) for doc in documents)
+        total_variations = sum(len(pattern.get("variations", [])) 
+                             for doc in documents 
+                             for pattern in doc.get("patterns", []))
+        total_sources = sum(len(doc.get("sources", [])) for doc in documents)
+        total_lenses = len([doc.get("lens") for doc in documents if doc.get("lens")])
+        
+        # Analyze document completeness
+        doc_analysis = []
+        for doc in documents:
+            patterns = doc.get("patterns", [])
+            sources = doc.get("sources", [])
+            lens = doc.get("lens", "")
+            
+            # Check for issues
+            issues = []
+            
+            if not patterns:
+                issues.append("No patterns found")
+            else:
+                # Check pattern completeness
+                for i, pattern in enumerate(patterns):
+                    if not pattern.get("title"):
+                        issues.append(f"Pattern {i+1} missing title")
+                    if not pattern.get("variations"):
+                        issues.append(f"Pattern {i+1} has no variations")
+                    if not pattern.get("overview"):
+                        issues.append(f"Pattern {i+1} missing overview")
+            
+            if not sources:
+                issues.append("No sources found")
+            
+            if not lens:
+                issues.append("No lens detected")
+            
+            doc_analysis.append({
+                "filename": doc.get("file_path", "").split("/")[-1] if doc.get("file_path") else "Unknown",
+                "lens": lens,
+                "patterns_count": len(patterns),
+                "variations_count": sum(len(p.get("variations", [])) for p in patterns),
+                "sources_count": len(sources),
+                "issues": issues,
+                "status": "✅ GOOD" if not issues else "⚠️ HAS ISSUES"
             })
         
-        # Process patterns
-        for pattern in doc.get("patterns", []):
-            report["summary"]["total_patterns"] += 1
-            
-            pattern_info = {
-                "lens": lens_name,
-                "pattern_number": pattern.get("pattern_number"),
-                "title": pattern.get("title"),
-                "summary_length": len(pattern.get("summary", "")),
-                "sources_count": len(pattern.get("sources", [])),
-                "variations_count": len(pattern.get("variations", []))
+        # Check folder structure
+        folder_path_obj = Path(folder_path)
+        has_step2 = (folder_path_obj / "Step 2").exists() or (folder_path_obj / "STEP 2").exists()
+        has_metas = (folder_path_obj / "METAS").exists()
+        
+        return {
+            "totals": {
+                "documents": len(documents),
+                "patterns": total_patterns,
+                "variations": total_variations,
+                "sources": total_sources,
+                "lenses": total_lenses,
+                "metas": len(metas)
+            },
+            "document_analysis": doc_analysis,
+            "folder_structure": {
+                "has_step2_folder": has_step2,
+                "has_metas_folder": has_metas,
+                "docx_files_found": len([f for f in folder_path_obj.glob("*.docx") if not f.name.startswith("~$")])
+            },
+            "data_quality": {
+                "documents_with_issues": len([d for d in doc_analysis if d["issues"]]),
+                "documents_without_patterns": len([d for d in doc_analysis if d["patterns_count"] == 0]),
+                "documents_without_variations": len([d for d in doc_analysis if d["variations_count"] == 0]),
+                "documents_without_sources": len([d for d in doc_analysis if d["sources_count"] == 0])
             }
-            
-            # 3. SOURCES
-            for source in pattern.get("sources", []):
-                report["summary"]["total_sources"] += 1
-                report["details"]["sources"].append({
-                    "pattern": pattern.get("title"),
-                    "source_number": source.get("source_number"),
-                    "author": source.get("author"),
-                    "title": source.get("title"),
-                    "year": source.get("year")
-                })
-            
-            # 5. VARIATIONS
-            for variation in pattern.get("variations", []):
-                report["summary"]["total_variations"] += 1
-                report["details"]["variations"].append({
-                    "pattern": pattern.get("title"),
-                    "variation_number": variation.get("variation_number"),
-                    "title": variation.get("title"),
-                    "content_length": len(variation.get("content", ""))
-                })
-            
-            report["details"]["patterns"].append(pattern_info)
+        }
     
-    # Write report
-    with open(report_file, 'w', encoding='utf-8') as f:
-        json.dump(report, f, indent=2, ensure_ascii=False)
+    def _generate_recommendations(self, analysis: Dict) -> List[str]:
+        """Generate actionable recommendations based on analysis"""
+        recommendations = []
+        
+        totals = analysis["totals"]
+        quality = analysis["data_quality"]
+        structure = analysis["folder_structure"]
+        
+        # Check basic extraction
+        if totals["documents"] == 0:
+            recommendations.append("🚨 CRITICAL: No documents found. Check folder path and ensure .docx files exist.")
+        
+        if totals["patterns"] == 0:
+            recommendations.append("🚨 CRITICAL: No patterns extracted. Check document format - patterns should start with 'Pattern N:'")
+        
+        if totals["variations"] == 0:
+            recommendations.append("🚨 CRITICAL: No variations extracted. Check variation format in documents.")
+        
+        # Check data quality issues
+        if quality["documents_with_issues"] > 0:
+            recommendations.append(f"⚠️ {quality['documents_with_issues']} documents have issues. Check individual document analysis below.")
+        
+        if quality["documents_without_sources"] > 0:
+            recommendations.append(f"⚠️ {quality['documents_without_sources']} documents missing sources. Ensure each pattern has source information.")
+        
+        # Check folder structure
+        if not structure["has_step2_folder"]:
+            recommendations.append("💡 No 'Step 2' folder found. Will process main folder documents.")
+        
+        if not structure["has_metas_folder"] and "metas" in analysis.get("extract_types", []):
+            recommendations.append("💡 No 'METAS' folder found. Meta extraction will be skipped.")
+        
+        # Positive feedback
+        if not recommendations:
+            recommendations.append("✅ All looks good! Data is ready for Airtable sync.")
+            
+        if totals["patterns"] > 0 and totals["variations"] > 0:
+            recommendations.append(f"✅ Successfully extracted {totals['patterns']} patterns with {totals['variations']} variations.")
+        
+        return recommendations
     
-    return report_file, report["summary"]
+    def _check_sync_readiness(self, analysis: Dict) -> bool:
+        """Check if data is ready for Airtable sync"""
+        totals = analysis["totals"]
+        quality = analysis["data_quality"]
+        
+        # Must have documents, patterns, and variations
+        has_core_data = totals["documents"] > 0 and totals["patterns"] > 0 and totals["variations"] > 0
+        
+        # Must not have critical issues
+        no_critical_issues = quality["documents_without_patterns"] == 0
+        
+        return has_core_data and no_critical_issues
+    
+    def _display_inspection_results(self, analysis: Dict, recommendations: List[str]):
+        """Display formatted inspection results"""
+        
+        print("\n📊 EXTRACTION SUMMARY")
+        print("-" * 40)
+        totals = analysis["totals"]
+        for key, value in totals.items():
+            print(f"{key.capitalize():15}: {value}")
+        
+        print(f"\n📁 FOLDER STRUCTURE")
+        print("-" * 40)
+        structure = analysis["folder_structure"]
+        for key, value in structure.items():
+            status = "✅" if value else "❌"
+            print(f"{status} {key.replace('_', ' ').title()}: {value}")
+        
+        print(f"\n📄 DOCUMENT ANALYSIS") 
+        print("-" * 40)
+        for doc in analysis["document_analysis"]:
+            print(f"\n📖 {doc['filename']}")
+            print(f"   Lens: {doc['lens'] or 'Not detected'}")
+            print(f"   Patterns: {doc['patterns_count']}")
+            print(f"   Variations: {doc['variations_count']}")
+            print(f"   Sources: {doc['sources_count']}")
+            print(f"   Status: {doc['status']}")
+            
+            if doc['issues']:
+                print(f"   Issues:")
+                for issue in doc['issues']:
+                    print(f"     • {issue}")
+        
+        print(f"\n💡 RECOMMENDATIONS")
+        print("-" * 40)
+        for i, rec in enumerate(recommendations, 1):
+            print(f"{i}. {rec}")
+        
+        print(f"\n🔄 SYNC READINESS")
+        print("-" * 40)
+        ready = self._check_sync_readiness(analysis)
+        status = "✅ READY FOR SYNC" if ready else "⚠️ NOT READY - Fix issues above"
+        print(f"Status: {status}")
+        
+        if ready:
+            print("\n🚀 You can proceed with:")
+            print("   python main.py --folder 'path' --variations --sync")
+        else:
+            print("\n🔧 Please fix the issues above before syncing to Airtable")
+    
+    def save_inspection_report(self, report: Dict, output_path: str = None) -> str:
+        """Save inspection report to JSON file"""
+        
+        if not output_path:
+            folder_name = Path(report["folder_path"]).name
+            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+            output_path = f"inspection_report_{folder_name}_{timestamp}.json"
+        
+        # Ensure output directory exists
+        os.makedirs("inspection_reports", exist_ok=True)
+        full_path = Path("inspection_reports") / output_path
+        
+        try:
+            with open(full_path, 'w', encoding='utf-8') as f:
+                json.dump(report, f, indent=2, ensure_ascii=False)
+            
+            print(f"\n💾 Inspection report saved to: {full_path}")
+            return str(full_path)
+            
+        except Exception as e:
+            print(f"❌ Error saving inspection report: {e}")
+            return ""
 
 
 def main():
-    """Main inspection function"""
-    logger, log_file = setup_logging()
+    """CLI interface for the data inspector"""
     
-    logger.info("="*50)
-    logger.info("DATA EXTRACTION INSPECTOR")
-    logger.info("="*50)
+    parser = argparse.ArgumentParser(description='Data Inspector - Analyze extraction results')
+    parser.add_argument('--folder', required=True, help='Folder path to inspect')
+    parser.add_argument('--extract-types', nargs='*', 
+                       choices=['metas', 'lenses', 'sources', 'patterns', 'variations'],
+                       default=['lenses', 'sources', 'patterns', 'variations'],
+                       help='Types of data to extract and inspect')
+    parser.add_argument('--save-report', action='store_true', help='Save detailed inspection report to file')
+    parser.add_argument('--output', help='Output file path for inspection report')
     
-    # Parse arguments
-    import argparse
-    parser = argparse.ArgumentParser(description='Inspect data extraction from DOCX files')
-    parser.add_argument('--folder', '-f', required=True, help='Target folder to inspect')
     args = parser.parse_args()
     
-    # Determine folder path
-    if os.path.isabs(args.folder):
-        folder_path = Path(args.folder)
-        folder_name = folder_path.name
-    else:
-        folder_path = settings.SOURCE_DIR / args.folder
-        folder_name = args.folder
+    # Create inspector
+    inspector = DataInspector()
     
-    logger.info(f"Inspecting folder: {folder_path}")
-    logger.info(f"Folder name: {folder_name}")
+    # Run inspection
+    report = inspector.inspect_folder(args.folder, args.extract_types)
     
-    # Extract data
-    extractor = DataExtractor()
-    logger.info("Starting data extraction...")
+    # Save report if requested
+    if args.save_report:
+        inspector.save_inspection_report(report, args.output)
     
-    try:
-        data = extractor.process_folder(str(folder_path))
-        
-        if not data:
-            logger.error("No data extracted!")
-            return
-        
-        logger.info("Data extraction complete!")
-        
-        # Create inspection report
-        log_dir = Path(__file__).parent / "logs"
-        report_file, summary = create_inspection_report(data, folder_name, log_dir)
-        
-        logger.info("="*50)
-        logger.info("EXTRACTION SUMMARY")
-        logger.info("="*50)
-        logger.info(f"Metas:      {summary['total_metas']}")
-        logger.info(f"Lenses:     {summary['total_lenses']}")
-        logger.info(f"Sources:    {summary['total_sources']}")
-        logger.info(f"Patterns:   {summary['total_patterns']}")
-        logger.info(f"Variations: {summary['total_variations']}")
-        logger.info("="*50)
-        logger.info(f"Inspection report saved to: {report_file}")
-        logger.info(f"Log file saved to: {log_file}")
-        logger.info("="*50)
-        
-        # Expected counts
-        total_docs = len(data.get("documents", []))
-        expected_variations = total_docs * 10
-        
-        logger.info("\nEXPECTED vs ACTUAL:")
-        logger.info(f"Expected Variations: {expected_variations} (10 per document)")
-        logger.info(f"Actual Variations:   {summary['total_variations']}")
-        
-        if summary['total_variations'] < expected_variations:
-            logger.warning(f"⚠️  Missing {expected_variations - summary['total_variations']} variations!")
-        else:
-            logger.info("✅ All variations extracted successfully!")
-        
-    except Exception as e:
-        logger.error(f"Error during extraction: {str(e)}", exc_info=True)
-        return
+    # Return exit code based on sync readiness
+    return 0 if report["ready_for_sync"] else 1
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())
