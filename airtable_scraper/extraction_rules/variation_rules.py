@@ -40,6 +40,19 @@ class VariationExtractor:
             r'^\d+\s*[–—-−]',
             r'^\s*[–—-−]\s*[A-Z]'
         ]
+        
+        # Patterns that indicate one-to-one variation-pattern mapping
+        self.one_per_pattern_indicators = [
+            r'\d+\s+variations?\s*\(\s*one\s+per\s+pattern\s*\)',
+            r'one\s+per\s+each\s+pattern',
+            r'one\s+variation\s+per\s+pattern',
+            r'variations?:\s*one\s+per\s+pattern',
+            r'each\s+variation\s+to\s+each\s+pattern',
+            r'variation\s+\d+\s+to\s+pattern\s+\d+',
+            r'link\s+each\s+variation\s+to\s+pattern',
+            r'one-to-one\s+mapping',
+            r'1:1\s+mapping'
+        ]
     
     def get_variation_patterns(self) -> List[Tuple[str, str]]:
         """
@@ -143,6 +156,33 @@ class VariationExtractor:
         text = re.sub(r'\s+', ' ', text)
         return text.strip()
     
+    def detect_one_per_pattern_mapping(self, paragraphs: List, logger=None) -> bool:
+        """
+        Detect if document contains indicators for one-to-one variation-pattern mapping.
+        
+        Args:
+            paragraphs: List of paragraph objects with .text attribute
+            logger: Optional logger instance
+            
+        Returns:
+            bool: True if one-to-one mapping indicators found
+        """
+        def log(message: str, level: str = "info"):
+            if logger:
+                getattr(logger, level, logger.info)(message)
+            
+        for para in paragraphs:
+            text = para.text.strip().lower()
+            if not text:
+                continue
+                
+            for pattern in self.one_per_pattern_indicators:
+                if re.search(pattern, text, re.IGNORECASE):
+                    log(f"Found one-per-pattern indicator: '{para.text.strip()}'")
+                    return True
+        
+        return False
+
     def extract_variations(self, paragraphs: List, file_path: str, logger=None) -> List[Dict]:
         """
         Extract variations from document paragraphs using the configured rules.
@@ -155,14 +195,19 @@ class VariationExtractor:
         Returns:
             List[Dict]: List of extracted variation dictionaries
         """
+        def log(message: str, level: str = "info"):
+            if logger:
+                getattr(logger, level, logger.info)(message)
+        
+        # Check for one-per-pattern mapping indicators
+        force_explicit_mapping = self.detect_one_per_pattern_mapping(paragraphs, logger)
+        if force_explicit_mapping:
+            log(f"One-per-pattern mapping detected in {file_path}. Will use 1:1 linking.")
+            
         variations = []
         i = 0
         current_var_num = 0
         patterns = self.get_variation_patterns()
-        
-        def log(message: str, level: str = "info"):
-            if logger:
-                getattr(logger, level, logger.info)(message)
         
         while i < len(paragraphs):
             text = paragraphs[i].text.strip()
@@ -236,11 +281,16 @@ class VariationExtractor:
                 if not content:
                     log(f"Variation {var_num} in {file_path} has no content", "warning")
                 
+                # Apply forced explicit mapping if detected
+                if force_explicit_mapping and pat_ref == 1:
+                    pat_ref = var_num  # Force 1:1 mapping
+                    
                 variations.append({
                     "variation_number": var_num,
                     "pattern_reference": pat_ref,
                     "title": title,
-                    "content": content
+                    "content": content,
+                    "forced_explicit_mapping": force_explicit_mapping
                 })
                 
                 log(f"Extracted variation {var_num} for pattern {pat_ref}: {title[:50]}...")

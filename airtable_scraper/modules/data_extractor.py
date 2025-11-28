@@ -121,23 +121,31 @@ class DataExtractor:
             if not paras:
                 return None
             
-            # Title: from filename (without extension)
-            title = Path(file_path).stem
-            
-            # Subtitle: first paragraph (skip if it's the same as title)
+            # Look for title:subtitle pattern in first paragraph
+            title = ""
             subtitle = ""
             content_start_idx = 0
             
             if paras:
-                # Check if first paragraph is the title (repeated)
-                if paras[0].strip() == title.strip():
-                    # Skip the title, subtitle is the next paragraph
-                    if len(paras) > 1:
-                        subtitle = paras[1]
-                        content_start_idx = 2
+                first_para = paras[0].strip()
+                
+                # Check if first paragraph contains title:subtitle pattern
+                if ": " in first_para:
+                    # Split on first colon to get title and subtitle
+                    parts = first_para.split(": ", 1)
+                    if len(parts) == 2:
+                        title = parts[0].strip()
+                        subtitle = parts[1].strip()
+                        content_start_idx = 1
+                    else:
+                        # Fallback to filename as title, first para as subtitle
+                        title = Path(file_path).stem
+                        subtitle = first_para
+                        content_start_idx = 1
                 else:
-                    # First paragraph is the subtitle
-                    subtitle = paras[0]
+                    # No colon pattern, use filename as title, first para as subtitle
+                    title = Path(file_path).stem
+                    subtitle = first_para
                     content_start_idx = 1
             
             # Content: everything after subtitle
@@ -223,9 +231,13 @@ class DataExtractor:
 
                     # Link variations to patterns
                     has_explicit_ref = any(v["pattern_reference"] != 1 for v in variations)
+                    force_explicit_mapping = any(v.get("forced_explicit_mapping", False) for v in variations)
                     
-                    if has_explicit_ref:
-                        self.log(f"Explicit pattern references detected in {f.name}. Using 1-to-1 mapping.")
+                    if has_explicit_ref or force_explicit_mapping:
+                        if force_explicit_mapping:
+                            self.log(f"One-per-pattern mapping forced in {f.name}. Using 1-to-1 mapping.")
+                        else:
+                            self.log(f"Explicit pattern references detected in {f.name}. Using 1-to-1 mapping.")
                         p_map = {p["pattern_number"]: p for p in patterns}
                         
                         for v in variations:

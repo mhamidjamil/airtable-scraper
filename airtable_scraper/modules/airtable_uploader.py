@@ -247,146 +247,41 @@ class AirtableUploader:
 
     # b: Match and update
     def sync_data(self, data: Dict, sync_types: List[str] = None, enable_linking: bool = False):
-        """Sync data with optional filtering by type"""
+        """Sync data with CORRECT order: Metas → Lenses → Sources → Patterns → Variations"""
         if sync_types is None:
-            sync_types = ["lenses", "sources", "metas", "patterns", "variations"]
+            sync_types = ["metas", "lenses", "sources", "patterns", "variations"]
         
         # Save what we're about to sync
         sync_type_str = "_".join(sync_types) if len(sync_types) > 1 else sync_types[0]
         self.save_sync_data(data, sync_type_str)
         
+        self.log(f"🚀 CORRECT UPLOAD SEQUENCE: Metas → Lenses → Sources → Patterns → Variations")
         self.log(f"Starting selective data sync for: {', '.join(sync_types)}...")
         
-        # 1. Sync Lenses first (foundational)
-        if "lenses" in sync_types:
-            self.log("Syncing Lenses...")
-            for doc in data.get("documents", []):
-                lens_name = doc.get("lens")
-                base_folder = doc.get("base_folder")
-                
-                if lens_name:
-                    fields = {
-                        "lens_title": lens_name,
-                        "base_folder": base_folder,
-                    }
-                    self._create_or_update("lenses", lens_name, fields)
-        
-        # 2. Sync Metas 
+        # 1. METAS FIRST (no dependencies)
         if "metas" in sync_types:
-            self.log("Syncing Metas...")
-            for meta in data.get("metas", []):
-                meta_title = meta.get("title")
-                base_folder = meta.get("base_folder")
-                
-                if meta_title:
-                    fields = {
-                        "meta_title": meta_title,
-                        "subtitle": meta.get("subtitle"),
-                        "content": meta.get("content"),
-                        "base_folder": base_folder,
-                    }
-                    self._create_or_update("metas", meta_title, fields)
+            self.log("📋 [1/5] Syncing Metas...")
+            self._sync_metas(data)
         
-        # 3. Sync Patterns and Variations (patterns first, always needed for variations)
-        if "patterns" in sync_types or "variations" in sync_types:
-            if "patterns" in sync_types:
-                self.log("Syncing Patterns...")
-            if "variations" in sync_types:
-                self.log("Preparing to sync variations...")
-            
-            for doc in data.get("documents", []):
-                lens_name = doc.get("lens")
-                base_folder = doc.get("base_folder")
-                
-                for p in doc.get("patterns", []):
-                    title = p.get("title")
-                    
-                    p_id = None
-                    
-                    # Handle pattern creation/retrieval
-                    if "patterns" in sync_types:
-                        # Create or update pattern
-                        fields = {
-                            "pattern_title": title,
-                            "overview": p.get("overview"),
-                            "choice": p.get("choice"),
-                            "base_folder": base_folder,
-                        }
-                        
-                        p_id = self._create_or_update("patterns", title, fields)
-                    else:
-                        # For variations-only mode, get existing pattern ID
-                        p_id = self.record_map["patterns"].get(self.normalize_for_matching(title))
-                        if not p_id:
-                            self.log(f"Warning: Pattern '{title}' not found in Airtable for variations linking", "error")
-                            continue
-                    
-                    # 2. Sync Variations (Link to Pattern)
-                    if "variations" in sync_types and p_id:
-                        variation_count = len(p.get("variations", []))
-                        self.log(f"Syncing {variation_count} variations for pattern: {title}")
-                        
-                        variations_synced = 0
-                        for v in p.get("variations", []):
-                            v_title = v.get("title")
-                            if v_title:  # Only sync variations with titles
-                                v_fields = {
-                                    "variation_title": v_title,
-                                    "content": v.get("content", "")
-                                }
-                                
-                                # Add lens field if lens_name is available
-                                if lens_name:
-                                    v_fields["lens"] = lens_name
-                                
-                                # Add base_folder field
-                                if base_folder:
-                                    v_fields["base_folder"] = base_folder
-                                
-                                # Add pattern linking if --sync flag is enabled
-                                if enable_linking and p_id:
-                                    # Use the correct field name from Airtable schema - array format
-                                    v_fields["pattern_reference"] = [p_id]
-                                    
-                                # Debug: Log what fields we're trying to send
-                                self.log(f"Creating variation '{v_title}' with fields: {list(v_fields.keys())}")
-                                result = self._create_or_update("variations", v_title, v_fields)
-                                if result:
-                                    variations_synced += 1
-                                    link_status = "with pattern link" if enable_linking else "without pattern link"
-                                    self.log(f"Successfully synced variation '{v_title}' to pattern '{title}' ({link_status})")
-                        
-                        self.log(f"Successfully synced {variations_synced}/{variation_count} variations for pattern: {title}")
+        # 2. LENSES SECOND (no dependencies)
+        if "lenses" in sync_types:
+            self.log("🔍 [2/5] Syncing Lenses...")
+            self._sync_lenses(data)
         
-        # 4. Sync Sources (if requested)  
+        # 3. SOURCES THIRD (no dependencies)
         if "sources" in sync_types:
-            self.log("Syncing Sources...")
-            for source in data.get("sources", []):
-                source_content = source.get("source")  # This is the content
-                base_folder = source.get("base_folder")
-                lens_name = source.get("lens")
-                
-                if source_content:
-                    fields = {
-                        "content": source_content,  # Primary field
-                        "base_folder": base_folder,
-                    }
-                    
-                    # Add lens field if available
-                    if lens_name:
-                        fields["lense"] = lens_name  # Note: correct field name is "lense" not "lens"
-                    
-                    # Add pattern linking if enabled and patterns exist
-                    if enable_linking and source.get("patterns"):
-                        pattern_ids = []
-                        for pattern_title in source.get("patterns", []):
-                            pattern_id = self.get_record_id("patterns", pattern_title)
-                            if pattern_id:
-                                pattern_ids.append(pattern_id)
-                        if pattern_ids:
-                            fields["Patterns"] = pattern_ids  # Correct field name with capital P
-                    
-                    self._create_or_update("sources", source_content, fields)
+            self.log("📚 [3/5] Syncing Sources...")
+            self._sync_sources(data)
+        
+        # 4. PATTERNS FOURTH (links to metas, lenses, sources)
+        if "patterns" in sync_types:
+            self.log("🎯 [4/5] Syncing Patterns...")
+            self._sync_patterns(data, enable_linking)
+        
+        # 5. VARIATIONS LAST (requires patterns for linking)
+        if "variations" in sync_types:
+            self.log("🔄 [5/5] Syncing Variations...")
+            self._sync_variations(data, enable_linking)
         
         # Log sync summary
         total_records = sum(len(cache) for cache in self.record_map.values())
@@ -395,7 +290,202 @@ class AirtableUploader:
             if cache:
                 self.log(f"  {table_key}: {len(cache)} records")
         self.log("Sync complete.")
+
+    def _sync_metas(self, data: Dict):
+        """Sync Metas with correct field names"""
+        metas_synced = 0
+        for meta in data.get("metas", []):
+            meta_title = meta.get("title")
+            
+            if meta_title:
+                # Clean base_folder value (remove quotes if present)
+                base_folder = meta.get("base_folder", "")
+                if base_folder and base_folder.startswith('"') and base_folder.endswith('"'):
+                    base_folder = base_folder[1:-1]  # Remove quotes
+                
+                fields = {
+                    "title": meta_title,  # PRIMARY FIELD (not meta_title)
+                    "subtitle": meta.get("subtitle", ""),
+                    "content": meta.get("content", "")
+                }
+                result = self._create_or_update("metas", meta_title, fields)
+                if result:
+                    metas_synced += 1
+                    self.log(f"Meta '{meta_title}' synced successfully")
+        
+        self.log(f"✅ Metas sync complete: {metas_synced} records")
+
+    def _sync_lenses(self, data: Dict):
+        """Sync Lenses with correct field names"""
+        lenses_synced = 0
+        for doc in data.get("documents", []):
+            lens_name = doc.get("lens")
+            
+            if lens_name:
+                fields = {
+                    "lens_name": lens_name,  # PRIMARY FIELD (not lens_title)
+                    "content": doc.get("summary", "")  # Use summary as content
+                }
+                result = self._create_or_update("lenses", lens_name, fields)
+                if result:
+                    lenses_synced += 1
+        
+        self.log(f"✅ Lenses sync complete: {lenses_synced} records")
+
+    def _sync_sources(self, data: Dict):
+        """Sync Sources with correct field names"""
+        sources_synced = 0
+        
+        # Process sources from patterns within each document
+        for doc in data.get("documents", []):
+            lens_name = doc.get("lens", "")
+            base_folder = doc.get("base_folder", "")
+            
+            # Sources are nested within patterns
+            for pattern in doc.get("patterns", []):
+                for source in pattern.get("parsed_sources", []):
+                    source_content = source.get("content")  # This is the primary content
+                    
+                    if source_content:
+                        fields = {
+                            "content": source_content,  # PRIMARY FIELD
+                            "lense": lens_name,  # Note: "lense" not "lens"
+                            "base_folder": base_folder
+                        }
+                        result = self._create_or_update("sources", source_content, fields)
+                        if result:
+                            sources_synced += 1
+                            self.log(f"Source '{source_content[:50]}...' synced")
+        
+        # Also process standalone sources array if it exists
+        for source in data.get("sources", []):
+            source_content = source.get("source")  # This is the primary content
+            
+            if source_content:
+                fields = {
+                    "content": source_content,  # PRIMARY FIELD
+                    "lense": source.get("lens", ""),  # Note: "lense" not "lens" 
+                    "base_folder": source.get("base_folder", "")
+                }
+                result = self._create_or_update("sources", source_content, fields)
+                if result:
+                    sources_synced += 1
+                    self.log(f"Standalone source '{source_content[:50]}...' synced")
+        
+        self.log(f"✅ Sources sync complete: {sources_synced} records")
+
+    def _sync_variations(self, data: Dict, enable_linking: bool = False):
+        """Sync Variations with pattern linking"""
+        variations_synced = 0
+        
+        for doc in data.get("documents", []):
+            lens_name = doc.get("lens")
+            base_folder = doc.get("base_folder")
+            
+            for pattern in doc.get("patterns", []):
+                pattern_title = pattern.get("title")
+                
+                # Get pattern ID for linking
+                pattern_id = None
+                if enable_linking and pattern_title:
+                    pattern_id = self.record_map["patterns"].get(self.normalize_for_matching(pattern_title))
+                    if not pattern_id:
+                        self.log(f"⚠️ Pattern '{pattern_title}' not found for variation linking", "error")
+                
+                for variation in pattern.get("variations", []):
+                    variation_title = variation.get("title")
+                    
+                    if variation_title:
+                        fields = {
+                            "variation_title": variation_title,  # PRIMARY FIELD
+                            "content": variation.get("content", ""),
+                            "lens": lens_name or "",
+                            "base_folder": base_folder or ""
+                        }
+                        
+                        # Add pattern linking if enabled and pattern exists
+                        if enable_linking and pattern_id:
+                            fields["pattern_reference"] = [pattern_id]  # Link field
+                        
+                        result = self._create_or_update("variations", variation_title, fields)
+                        if result:
+                            variations_synced += 1
+                            link_msg = f" → linked to '{pattern_title}'" if pattern_id else " (no pattern link)"
+                            self.log(f"Variation '{variation_title}'{link_msg}")
+        
+        self.log(f"✅ Variations sync complete: {variations_synced} records")
+
+    def _sync_patterns(self, data: Dict, enable_linking: bool = False):
+        """Sync Patterns with links to Metas, Lenses, Sources"""
+        patterns_synced = 0
+        
+        for doc in data.get("documents", []):
+            lens_name = doc.get("lens")
+            base_folder = doc.get("base_folder")
+            
+            for pattern in doc.get("patterns", []):
+                pattern_title = pattern.get("title")
+                
+                if pattern_title:
+                    fields = {
+                        "pattern_title": pattern_title,  # PRIMARY FIELD
+                        "overview": pattern.get("overview", ""),
+                        "choice": pattern.get("choice", ""), 
+                        "base_folder": base_folder or ""
+                    }
+                    
+                    # Add linking if enabled
+                    if enable_linking:
+                        # Link to Lens
+                        if lens_name:
+                            lens_id = self.record_map["lenses"].get(self.normalize_for_matching(lens_name))
+                            if lens_id:
+                                fields["lens"] = [lens_id]  # Link to Lenses table
+                        
+                        # Link to Sources (pattern sources if available)
+                        pattern_sources = pattern.get("parsed_sources", [])
+                        if pattern_sources:
+                            source_ids = []
+                            for source in pattern_sources:
+                                # Extract content from source object
+                                source_content = source.get("content", "")
+                                if source_content:
+                                    source_id = self.record_map["sources"].get(self.normalize_for_matching(source_content))
+                                    if source_id:
+                                        source_ids.append(source_id)
+                            if source_ids:
+                                fields["sources"] = source_ids  # Link to Sources table
+                        
+                        # Link to Metas (if pattern belongs to specific metas)
+                        # Note: This might need custom logic based on your meta-pattern relationships
+                        # For now, we'll link all patterns to all metas from the same base_folder
+                        if base_folder:
+                            meta_ids = []
+                            for meta_key, meta_id in self.record_map["metas"].items():
+                                meta_ids.append(meta_id)  # Link all metas for now
+                            if meta_ids:
+                                fields["Metas"] = meta_ids  # Link to Metas table
+                    
+                    result = self._create_or_update("patterns", pattern_title, fields)
+                    if result:
+                        patterns_synced += 1
+                        links = []
+                        if enable_linking:
+                            if "lens" in fields: links.append("lens")
+                            if "sources" in fields: links.append(f"{len(fields['sources'])} sources")
+                            if "Metas" in fields: links.append(f"{len(fields['Metas'])} metas")
+                        link_msg = f" → linked to: {', '.join(links)}" if links else ""
+                        self.log(f"Pattern '{pattern_title}'{link_msg}")
+        
+        self.log(f"✅ Patterns sync complete: {patterns_synced} records")
     
+    def get_record_id(self, table_key: str, record_name: str) -> str:
+        """Get record ID for linking purposes"""
+        if not record_name:
+            return None
+        normalized_key = self.normalize_for_matching(record_name)
+        return self.record_map.get(table_key, {}).get(normalized_key)
+
     def save_sync_data(self, data: Dict, sync_type: str = "all"):
         """Save what's being synced to timestamped JSON file"""
         from datetime import datetime
