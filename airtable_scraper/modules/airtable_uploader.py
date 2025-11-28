@@ -306,7 +306,8 @@ class AirtableUploader:
                 fields = {
                     "title": meta_title,  # PRIMARY FIELD (not meta_title)
                     "subtitle": meta.get("subtitle", ""),
-                    "content": meta.get("content", "")
+                    "content": meta.get("content", ""),
+                    "base_folder": base_folder  # Add base_folder field as single line string
                 }
                 result = self._create_or_update("metas", meta_title, fields)
                 if result:
@@ -404,13 +405,28 @@ class AirtableUploader:
                         }
                         
                         # Add pattern linking if enabled and pattern exists
+                        pattern_link_msg = ""
                         if enable_linking and pattern_id:
                             fields["pattern_reference"] = [pattern_id]  # Link field
+                            pattern_link_msg = f" → pattern: '{pattern_title}'"
+                        else:
+                            pattern_link_msg = " (no pattern link)"
+                        
+                        # Add lens linking if enabled and lens exists
+                        lens_link_msg = ""
+                        if enable_linking and lens_name:
+                            lens_id = self.record_map["lenses"].get(self.normalize_for_matching(lens_name))
+                            if lens_id:
+                                fields["lense_link"] = [lens_id]  # Link to Lenses table
+                                lens_link_msg = f" → lens: '{lens_name}'"
+                            else:
+                                lens_link_msg = f" (lens '{lens_name}' not found)"
+                        
+                        link_msg = pattern_link_msg + lens_link_msg
                         
                         result = self._create_or_update("variations", variation_title, fields)
                         if result:
                             variations_synced += 1
-                            link_msg = f" → linked to '{pattern_title}'" if pattern_id else " (no pattern link)"
                             self.log(f"Variation '{variation_title}'{link_msg}")
         
         self.log(f"✅ Variations sync complete: {variations_synced} records")
@@ -444,17 +460,28 @@ class AirtableUploader:
                         
                         # Link to Sources (pattern sources if available)
                         pattern_sources = pattern.get("parsed_sources", [])
+                        self.log(f"Debug: Pattern '{pattern_title}' has {len(pattern_sources)} parsed_sources")
                         if pattern_sources:
                             source_ids = []
-                            for source in pattern_sources:
+                            for i, source in enumerate(pattern_sources):
                                 # Extract content from source object
                                 source_content = source.get("content", "")
                                 if source_content:
-                                    source_id = self.record_map["sources"].get(self.normalize_for_matching(source_content))
+                                    normalized_content = self.normalize_for_matching(source_content)
+                                    source_id = self.record_map["sources"].get(normalized_content)
                                     if source_id:
                                         source_ids.append(source_id)
+                                        self.log(f"Debug: Source {i+1} '{source_content[:50]}...' → LINKED")
+                                    else:
+                                        self.log(f"Debug: Source {i+1} '{source_content[:50]}...' → NOT FOUND in sources table")
+                                else:
+                                    self.log(f"Debug: Source {i+1} has no content")
+                            
                             if source_ids:
                                 fields["sources"] = source_ids  # Link to Sources table
+                                self.log(f"Pattern '{pattern_title}' linked to {len(source_ids)} sources")
+                            else:
+                                self.log(f"⚠️ Pattern '{pattern_title}' has NO source links despite {len(pattern_sources)} parsed sources")
                         
                         # Link to Metas (if pattern belongs to specific metas)
                         # Note: This might need custom logic based on your meta-pattern relationships

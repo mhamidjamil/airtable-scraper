@@ -21,9 +21,9 @@ Extract pattern data from .docx files in `new_extractions` folder and upload to 
 5 interconnected tables:
 1. **Lenses** (42 unique) - Interpretive frameworks
 2. **Sources** (222 unique) - Source attributions
-3. **METAS** (54 from METAS folders) - Organizing themes/topics
+3. **METAS** (54 from METAS folders) - Organizing themes/topics with base_folder field
 4. **Patterns** (420+) - Main content with lens, sources, METAS links
-5. **Variations** (351+) - Alternative formulations of patterns
+5. **Variations** (351+) - Alternative formulations linked to patterns AND lenses
 
 ---
 
@@ -217,11 +217,14 @@ pattern["lens_id"] = lookup_lens_id(pattern["lens_name"])
 # Patterns → Sources (1:Many)
 pattern["source_ids"] = [lookup_source_id(s) for s in pattern["sources"]]
 
-# Patterns → METAS (1:Many) ⚠️ TBD
-pattern["meta_ids"] = [...] # Strategy unclear
+# Patterns → METAS (1:Many) - All metas from same base_folder
+pattern["meta_ids"] = lookup_metas_by_base_folder(pattern["base_folder"])
 
 # Variations → Pattern (1:1)
 variation["pattern_id"] = lookup_pattern_id(variation["pattern_title"])
+
+# Variations → Lens (1:1) - Same lens as parent pattern
+variation["lens_id"] = lookup_lens_id(variation["lens_name"])
 ```
 
 ---
@@ -306,12 +309,36 @@ Method: CSV import via Airtable UI or API
 
 ---
 
+## 🔍 Source Linking Debug Info
+
+### **Issue: Half of Sources Remain Unlinked**
+**Problem:** Despite sources being extracted from patterns, many show as unlinked in Airtable
+
+**Debug Strategy:**
+```python
+# Added logging to pattern sync:
+self.log(f"Debug: Pattern '{pattern_title}' has {len(pattern_sources)} parsed_sources")
+for i, source in enumerate(pattern_sources):
+    self.log(f"Debug: Source {i+1} '{source_content[:50]}...' → LINKED/NOT FOUND")
+```
+
+**Common Causes:**
+1. Normalization mismatch (spaces, punctuation)
+2. Source content extracted differently during extraction vs. upload
+3. Duplicate sources with slightly different text
+4. Sources table populated before patterns table
+
+**Solution:** Debug logging shows exact content and matching status
+
+---
+
 ## 🛠️ Tools & Scripts
 
 ### **Current Scripts**
 1. `pattern_to_json/extract_new_patterns.py` - Original batch extractor
 2. `airtable_manager/extract_patterns.py` - New focused extractor
 3. `airtable_manager/prepare_airtable_data.py` - CSV generator
+4. `modules/airtable_uploader.py` - Upload with relationship linking
 
 ### **Dependencies**
 ```python
@@ -359,13 +386,17 @@ pyairtable   # API upload (optional, future)
 
 ---
 
-## 🚨 Critical Unknowns (Client Input Needed)
+## 🚨 Status Updates
 
-1. **METAS Mapping:** How do patterns link to METAS?
-2. **Google Drive URLs:** Should we generate docs and upload to Drive?
-3. **base_folder Usage:** Keep in Patterns table or remove?
-4. **Variation Numbering:** Preserve originals (6-10) or renumber (1-5)?
-5. **Source Parsing:** Split long source strings or keep as-is?
+### **Resolved Issues:**
+1. ✅ **METAS base_folder:** Now uploaded as single line text (e.g., "BULLSHIT")
+2. ✅ **Variation-Lens Linking:** Implemented `lense_link` field in variations table
+3. ✅ **Source Linking Debug:** Added detailed logging for troubleshooting
+4. ✅ **Upload Sequence:** Fixed to ensure dependencies exist before linking
+
+### **Remaining Client Questions:**
+1. **Google Drive URLs:** Should we generate docs and upload to Drive?
+2. **Source Parsing:** Split long source strings or keep as-is?
 
 ---
 
@@ -380,6 +411,6 @@ When helping with this project:
 
 ---
 
-**Last Updated:** 2025-11-25  
-**Version:** 1.0  
-**Status:** Active Development - METAS mapping pending client clarification
+**Last Updated:** 2025-11-28  
+**Version:** 1.1  
+**Status:** Active Development - Core linking issues resolved, debug logging added

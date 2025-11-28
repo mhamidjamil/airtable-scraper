@@ -25,7 +25,7 @@
 | `title` (Primary) | `meta.title` | Single line text |
 | `subtitle` | `meta.subtitle` | Long text |
 | `content` | `meta.content` | Long text |
-| `base_folder` | `meta.base_folder` | Single select |
+| `base_folder` | `meta.base_folder` | Single line text |
 | `linked_patterns` | Auto-generated | Link to Patterns |
 
 ### **Table 2: Lenses**
@@ -49,6 +49,7 @@
 | `variation_title` (Primary) | `variation.title` | Single line text |
 | `content` | `variation.content` | Long text |
 | `pattern_reference` | Link to Pattern | Link to Patterns |
+| `lense_link` | Link to Lens | Link to Lenses |
 | `base_folder` | `variation.base_folder` | Single select |
 | `lens` | `variation.lens` | Single line text |
 
@@ -73,9 +74,11 @@
 - **Patterns** → **Sources** (via `sources` field)  
 - **Patterns** → **Metas** (via `Metas` field)
 - **Variations** → **Patterns** (via `pattern_reference` field)
+- **Variations** → **Lenses** (via `lense_link` field)
 
 ### **Reverse Links (Airtable Creates Automatically):**
 - **Lenses** → **Patterns** (auto-generated `Patterns` field)
+- **Lenses** → **Variations** (auto-generated reverse link from `lense_link`)
 - **Sources** → **Patterns** (auto-generated `Patterns` field)
 - **Metas** → **Patterns** (auto-generated `linked_patterns` field)
 - **Patterns** → **Variations** (auto-generated `variations` field)
@@ -142,7 +145,7 @@ fields = {
     "title": meta.get("title"),           # NOT "meta_title"
     "subtitle": meta.get("subtitle"),
     "content": meta.get("content"),
-    "base_folder": meta.get("base_folder")
+    "base_folder": meta.get("base_folder")  # Single line text (e.g., "BULLSHIT")
 }
 
 # LENSES:
