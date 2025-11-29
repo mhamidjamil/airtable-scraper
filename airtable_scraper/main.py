@@ -31,6 +31,8 @@ def parse_arguments():
                        help='Enable sync mode (can be combined with specific table types)')
     
     # Selective sync options (case-insensitive)
+    parser.add_argument('--choices', '--choice', '--Choices', '--Choice', '--CHOICES', '--CHOICE',
+                       action='store_true', help='Sync only choices')
     parser.add_argument('--variations', '--variation', '--Variations', '--Variation', '--VARIATIONS', '--VARIATION',
                        action='store_true', help='Sync only variations')
     parser.add_argument('--patterns', '--pattern', '--Patterns', '--Pattern', '--PATTERNS', '--PATTERN',
@@ -56,6 +58,8 @@ def determine_sync_types(args):
     """Determine which data types to sync based on arguments"""
     sync_types = []
     
+    if args.choices:
+        sync_types.append('choices')
     if args.lenses:
         sync_types.append('lenses')
     if args.sources:
@@ -69,7 +73,7 @@ def determine_sync_types(args):
     
     # If no specific types selected, sync everything
     if not sync_types:
-        sync_types = ['lenses', 'sources', 'metas', 'patterns', 'variations']
+        sync_types = ['choices', 'lenses', 'sources', 'metas', 'patterns', 'variations']
     
     return sync_types, args.sync
 

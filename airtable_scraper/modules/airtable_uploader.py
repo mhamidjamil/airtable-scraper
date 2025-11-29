@@ -21,7 +21,8 @@ class AirtableUploader:
             "sources": {},
             "metas": {},
             "patterns": {},
-            "variations": {}
+            "variations": {},
+            "choices": {}
         }
 
     def log(self, msg, level="info"):
@@ -61,7 +62,7 @@ class AirtableUploader:
         return clean_fields
     
     def _check_field_exists(self, table_key: str, field_name: str) -> bool:
-        """Check if a field exists in the table by attempting a test query"""
+        """Check if a field exists in the table using schema-based validation"""
         # This is cached after first check to avoid repeated API calls
         cache_key = f"{table_key}_{field_name}"
         if hasattr(self, '_field_existence_cache'):
@@ -75,23 +76,25 @@ class AirtableUploader:
             self._field_existence_cache[cache_key] = False
             return False
         
-        try:
-            # Try to get records with just this field to test if it exists
-            params = {"maxRecords": 1, "fields": [field_name]}
-            resp = requests.get(f"{self.base_url}/{table_name}", headers=self.headers, params=params, timeout=30)
-            # Field exists if we don't get a 422 error about unknown field
-            exists = resp.status_code != 422
-            self._field_existence_cache[cache_key] = exists
-            return exists
-        except:
-            self._field_existence_cache[cache_key] = False
-            return False
+        # Define known field schema for each table based on actual Airtable schema
+        known_fields = {
+            "patterns": ["pattern_title", "base_folder", "choice", "sources", "lens", "overview", "variations", "Metas", "variation_count"],
+            "variations": ["variation_title", "content", "pattern_reference"],
+            "choices": ["content", "pattern"],
+            "sources": ["content", "Patterns"],
+            "lenses": ["lens_name", "content", "Patterns"],
+            "metas": ["title", "subtitle", "content", "linked_patterns", "base_folder"]
+        }
+        
+        exists = field_name in known_fields.get(table_key, [])
+        self._field_existence_cache[cache_key] = exists
+        return exists
 
     # a: Read already uploaded data
     def fetch_existing_records(self, sync_types=None):
         """Fetch existing records from Airtable, focusing on needed types"""
         if sync_types is None:
-            sync_types = ["lenses", "sources", "metas", "patterns", "variations"]
+            sync_types = ["choices", "lenses", "sources", "metas", "patterns", "variations"]
         
         self.log(f"Fetching existing records from Airtable for: {', '.join(sync_types)}...")
         
@@ -99,11 +102,11 @@ class AirtableUploader:
         tables_to_fetch = sync_types[:]
         if "patterns" in sync_types:
             # When syncing patterns, we need ALL related tables for linking
-            required_tables = ["lenses", "sources", "metas", "variations"]
+            required_tables = ["choices", "lenses", "sources", "metas", "variations"]
             for table in required_tables:
                 if table not in tables_to_fetch:
                     tables_to_fetch.append(table)
-            self.log("Also fetching all related tables (lenses, sources, metas, variations) for pattern linking")
+            self.log("Also fetching all related tables (choices, lenses, sources, metas, variations) for pattern linking")
             
         if "variations" in sync_types and "patterns" not in tables_to_fetch:
             tables_to_fetch.append("patterns")
@@ -118,6 +121,9 @@ class AirtableUploader:
             self.log("Also fetching patterns (needed for source linking)")
         
         # Fetch each required table
+        if "choices" in tables_to_fetch:
+            self._fetch_table_map("choices", "content")
+        
         if "lenses" in tables_to_fetch:
             self._fetch_table_map("lenses", "lens_name")
         
@@ -375,32 +381,37 @@ class AirtableUploader:
         sync_type_str = "_".join(sync_types) if len(sync_types) > 1 else sync_types[0]
         self.save_sync_data(data, sync_type_str)
         
-        self.log(f"🚀 CORRECT UPLOAD SEQUENCE: Metas → Lenses → Sources → Patterns → Variations")
+        self.log(f"🚀 CORRECT UPLOAD SEQUENCE: Choices → Metas → Lenses → Sources → Patterns → Variations")
         self.log(f"Starting selective data sync for: {', '.join(sync_types)}...")
         
-        # 1. METAS FIRST (no dependencies)
+        # 1. CHOICES FIRST (no dependencies)
+        if "choices" in sync_types:
+            self.log("💭 [1/6] Syncing Choices...")
+            self._sync_choices(data)
+        
+        # 2. METAS SECOND (no dependencies)
         if "metas" in sync_types:
-            self.log("📋 [1/5] Syncing Metas...")
+            self.log("📋 [2/6] Syncing Metas...")
             self._sync_metas(data)
         
-        # 2. LENSES SECOND (no dependencies)
+        # 3. LENSES THIRD (no dependencies)
         if "lenses" in sync_types:
-            self.log("🔍 [2/5] Syncing Lenses...")
+            self.log("🔍 [3/6] Syncing Lenses...")
             self._sync_lenses(data)
         
-        # 3. SOURCES THIRD (no dependencies)
+        # 4. SOURCES FOURTH (no dependencies)
         if "sources" in sync_types:
-            self.log("📚 [3/5] Syncing Sources...")
+            self.log("📚 [4/6] Syncing Sources...")
             self._sync_sources(data)
         
-        # 4. PATTERNS FOURTH (links to metas, lenses, sources)
+        # 5. PATTERNS FIFTH (links to metas, lenses, sources, choices)
         if "patterns" in sync_types:
-            self.log("🎯 [4/5] Syncing Patterns...")
+            self.log("🎯 [5/6] Syncing Patterns...")
             self._sync_patterns(data, enable_linking)
         
-        # 5. VARIATIONS LAST (requires patterns for linking)
+        # 6. VARIATIONS LAST (requires patterns for linking)
         if "variations" in sync_types:
-            self.log("🔄 [5/5] Syncing Variations...")
+            self.log("🔄 [6/6] Syncing Variations...")
             self._sync_variations(data, enable_linking)
         
         # Handle relationship syncing for individual table operations with --sync flag
@@ -418,6 +429,33 @@ class AirtableUploader:
             if cache:
                 self.log(f"  {table_key}: {len(cache)} records")
         self.log("Sync complete.")
+
+    def _sync_choices(self, data: Dict):
+        """Sync Choices table with choice content from patterns"""
+        choices_synced = 0
+        for doc in data.get("documents", []):
+            for pattern in doc.get("patterns", []):
+                choice_content = pattern.get("choice", "")
+                
+                if choice_content and choice_content.strip():
+                    # Use a hash of the choice content as the unique key
+                    import hashlib
+                    choice_hash = hashlib.md5(choice_content.encode()).hexdigest()[:8]
+                    unique_key = f"choice_{choice_hash}"
+                    
+                    fields = {
+                        "content": choice_content.strip()
+                        # Note: pattern field will be linked from patterns table via back-relation
+                    }
+                    
+                    result = self._create_or_update("choices", unique_key, fields, force_update=False)
+                    if result:
+                        choices_synced += 1
+                        # Store the choice record ID for pattern linking
+                        pattern["_choice_record_id"] = result
+                        self.log(f"Choice synced: {choice_content[:50]}...")
+        
+        self.log(f"✅ Choices sync complete: {choices_synced} records")
 
     def _sync_metas(self, data: Dict):
         """Sync Metas with correct field names"""
@@ -557,7 +595,7 @@ class AirtableUploader:
                     fields = {
                         "pattern_title": pattern_title,  # PRIMARY FIELD
                         "overview": pattern.get("overview", ""),
-                        "choice": pattern.get("choice", ""), 
+                        "variation_count": str(pattern.get("variation_count", 0)),  # Convert to string for singleLineText field
                         "base_folder": base_folder or ""
                     }
                     
@@ -593,6 +631,12 @@ class AirtableUploader:
                                 self.log(f"Pattern '{pattern_title}' linked to {len(source_ids)} sources")
                             else:
                                 self.log(f"⚠️ Pattern '{pattern_title}' has NO source links despite {len(pattern_sources)} parsed sources")
+                        
+                        # Link to Choice (if pattern has a choice and it was synced)
+                        choice_record_id = pattern.get("_choice_record_id")
+                        if choice_record_id:
+                            fields["choice"] = [choice_record_id]  # Link to Choices table
+                            self.log(f"Pattern '{pattern_title}' linked to choice")
                         
                         # Link to Metas (if pattern belongs to specific metas)
                         # Note: This might need custom logic based on your meta-pattern relationships

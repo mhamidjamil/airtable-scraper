@@ -77,25 +77,57 @@ class DataExtractor:
                 title = match.group(2).strip()
                 overview, choice, source = "", "", ""
                 
-                # Collect next 3 sections
+                # Collect sections until next pattern or end
                 j = i + 1
-                section_idx = 0
-                while j < len(paragraphs) and section_idx < 3:
+                current_section = "overview"  # Start with overview/explanation
+                overview_parts = []
+                choice_parts = []
+                source_parts = []
+                
+                while j < len(paragraphs):
                     p_text = paragraphs[j].text.strip()
                     if not p_text:
                         j += 1
                         continue
                     
+                    # Check if we hit next pattern or variation
                     if re.match(r'^(Pattern|Variation)\s+\d+', p_text, re.IGNORECASE):
                         break
-                        
-                    cleaned = self.clean_text(self.clean_label(p_text))
-                    if section_idx == 0: overview = cleaned
-                    elif section_idx == 1: choice = cleaned
-                    elif section_idx == 2: source = cleaned
                     
-                    section_idx += 1
+                    # Detect section markers for choice and source
+                    lower_text = p_text.lower()
+                    if (re.search(r'^(inner war[/\s]*choice|choice[/\s]*inner war|choice)\s*:', lower_text) or 
+                        lower_text.startswith('choice:') or lower_text.startswith('inner war:')):
+                        current_section = "choice"
+                        # Extract content after the marker
+                        content = re.sub(r'^(inner war[/\s]*choice|choice[/\s]*inner war|choice|inner war)\s*:\s*', '', p_text, flags=re.IGNORECASE)
+                        if content.strip():
+                            choice_parts.append(content)
+                    elif (lower_text.startswith('sources:') or lower_text.startswith('source:')):
+                        current_section = "source"
+                        # Extract content after the marker
+                        content = re.sub(r'^sources?\s*:\s*', '', p_text, flags=re.IGNORECASE)
+                        if content.strip():
+                            source_parts.append(content)
+                    else:
+                        # Regular content - add to current section
+                        cleaned = self.clean_text(self.clean_label(p_text))
+                        if cleaned:
+                            if current_section == "overview":
+                                # Skip if it's just "Explanation" - look for actual content
+                                if cleaned.lower() != "explanation":
+                                    overview_parts.append(cleaned)
+                            elif current_section == "choice":
+                                choice_parts.append(cleaned)
+                            elif current_section == "source":
+                                source_parts.append(cleaned)
+                    
                     j += 1
+                
+                # Combine parts
+                overview = self.clean_text(" ".join(overview_parts))
+                choice = self.clean_text(" ".join(choice_parts))
+                source = self.clean_text(" ".join(source_parts))
                 
                 patterns.append({
                     "pattern_number": p_num,
@@ -103,6 +135,7 @@ class DataExtractor:
                     "overview": overview,
                     "choice": choice,
                     "source": source,  # Keep original for backward compatibility
+                    "variation_count": 0,  # Will be updated after variations are linked
                     "variations": []
                 })
             i += 1
@@ -272,6 +305,10 @@ class DataExtractor:
                                     "content": v["content"]
                                 })
                             self.log(f"Linked {len(variations)} variations to Pattern 1: {target['title'][:30]}...")
+
+                    # Calculate variation counts for each pattern
+                    for pattern in patterns:
+                        pattern["variation_count"] = len(pattern.get("variations", []))
 
                     # d: Lens Extractor
                     lens_name = f.stem

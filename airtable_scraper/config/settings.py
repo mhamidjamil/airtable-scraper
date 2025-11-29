@@ -33,7 +33,8 @@ AIRTABLE_CONFIG = {
         "sources": "Sources",
         "metas": "Metas",
         "variations": "Variations",
-        "patterns": "Patterns"
+        "patterns": "Patterns",
+        "choices": "Choices"
     }
 }
 

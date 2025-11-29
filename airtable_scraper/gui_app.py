@@ -55,6 +55,7 @@ class AirtableScraperGUI:
         self.enable_sync = tk.BooleanVar(value=True)
         
         # Data type variables
+        self.sync_choices = tk.BooleanVar(value=True)
         self.sync_lenses = tk.BooleanVar(value=True)
         self.sync_sources = tk.BooleanVar(value=True)
         self.sync_metas = tk.BooleanVar(value=True)
@@ -146,25 +147,29 @@ class AirtableScraperGUI:
         sync_frame.grid(row=5, column=0, columnspan=3, sticky=(tk.W, tk.E), pady=(0, 15))
         sync_frame.columnconfigure(5, weight=1)
         
-        # Single row of checkboxes
+        # Single row of checkboxes - make grid more compact
+        choices_cb = ttk.Checkbutton(sync_frame, text="💭 Choices", variable=self.sync_choices)
+        choices_cb.grid(row=0, column=0, sticky=tk.W, padx=(0, 10))
+        self.create_tooltip(choices_cb, "Pattern choice content and decisions")
+        
         lenses_cb = ttk.Checkbutton(sync_frame, text="📖 Lenses", variable=self.sync_lenses)
-        lenses_cb.grid(row=0, column=0, sticky=tk.W, padx=(0, 15))
+        lenses_cb.grid(row=0, column=1, sticky=tk.W, padx=(0, 10))
         self.create_tooltip(lenses_cb, "Conceptual frameworks and perspectives")
         
         sources_cb = ttk.Checkbutton(sync_frame, text="📚 Sources", variable=self.sync_sources)
-        sources_cb.grid(row=0, column=1, sticky=tk.W, padx=(0, 15))
+        sources_cb.grid(row=0, column=2, sticky=tk.W, padx=(0, 10))
         self.create_tooltip(sources_cb, "Reference materials and citations")
         
         metas_cb = ttk.Checkbutton(sync_frame, text="📋 Metas", variable=self.sync_metas)
-        metas_cb.grid(row=0, column=2, sticky=tk.W, padx=(0, 15))
+        metas_cb.grid(row=0, column=3, sticky=tk.W, padx=(0, 10))
         self.create_tooltip(metas_cb, "Document metadata and information")
         
         patterns_cb = ttk.Checkbutton(sync_frame, text="🎯 Patterns", variable=self.sync_patterns)
-        patterns_cb.grid(row=0, column=3, sticky=tk.W, padx=(0, 15))
+        patterns_cb.grid(row=1, column=0, sticky=tk.W, padx=(0, 10), pady=(5,0))
         self.create_tooltip(patterns_cb, "Core structural patterns and frameworks")
         
         variations_cb = ttk.Checkbutton(sync_frame, text="🔄 Variations", variable=self.sync_variations)
-        variations_cb.grid(row=0, column=4, sticky=tk.W, padx=(0, 15))
+        variations_cb.grid(row=1, column=1, sticky=tk.W, padx=(0, 10), pady=(5,0))
         self.create_tooltip(variations_cb, "Pattern variations and implementations")
         
         # Selection buttons - More compact
@@ -331,10 +336,14 @@ class AirtableScraperGUI:
         """Setup logging to capture output from the scraper modules"""
         # Create a custom logger
         self.logger = logging.getLogger("AirtableScraperGUI")
-        self.logger.setLevel(logging.INFO)
+        self.logger.setLevel(logging.DEBUG)  # Capture more detailed logs
         
         # Clear any existing handlers
         self.logger.handlers.clear()
+        
+        # Also capture the root logger to get module logs
+        root_logger = logging.getLogger()
+        root_logger.setLevel(logging.INFO)
         
         # Create our custom handler
         handler = LogHandler(self.log_queue)
@@ -342,6 +351,10 @@ class AirtableScraperGUI:
                                     datefmt='%H:%M:%S')
         handler.setFormatter(formatter)
         self.logger.addHandler(handler)
+        
+        # Add handler to root logger to catch all module logs
+        if not any(isinstance(h, LogHandler) for h in root_logger.handlers):
+            root_logger.addHandler(handler)
         
     def check_log_queue(self):
         """Check for new log messages and display them with color coding"""
@@ -398,6 +411,7 @@ class AirtableScraperGUI:
     
     def select_all_types(self):
         """Select all data types"""
+        self.sync_choices.set(True)
         self.sync_lenses.set(True)
         self.sync_sources.set(True)
         self.sync_metas.set(True)
@@ -406,6 +420,7 @@ class AirtableScraperGUI:
     
     def deselect_all_types(self):
         """Deselect all data types"""
+        self.sync_choices.set(False)
         self.sync_lenses.set(False)
         self.sync_sources.set(False)
         self.sync_metas.set(False)
@@ -480,6 +495,8 @@ class AirtableScraperGUI:
     def get_selected_sync_types(self):
         """Get list of selected sync types"""
         sync_types = []
+        if self.sync_choices.get():
+            sync_types.append('choices')
         if self.sync_lenses.get():
             sync_types.append('lenses')
         if self.sync_sources.get():
@@ -948,15 +965,27 @@ def main():
         style.theme_use('clam')
     
     # Configure custom professional styles for better visibility
-    style.configure('Accent.TButton', 
-                   font=('Segoe UI', 11, 'bold'),
-                   foreground='#ffffff',
-                   background='#0078d4')
-    
-    style.configure('Start.TButton', 
-                   font=('Segoe UI', 10, 'bold'),
-                   foreground='#ffffff',
-                   background='#107c10')
+    try:
+        style.configure('Accent.TButton', 
+                       font=('Segoe UI', 11, 'bold'),
+                       foreground='white',
+                       background='#0078d4',
+                       relief='raised')
+        
+        style.configure('Start.TButton', 
+                       font=('Segoe UI', 11, 'bold'),
+                       foreground='black',
+                       background='#28a745',
+                       relief='raised',
+                       borderwidth=2)
+        
+        # Map styles for different button states
+        style.map('Start.TButton',
+                 background=[('active', '#1e7e34'),
+                            ('pressed', '#155724')])
+    except Exception:
+        # Fallback for platforms where advanced styling doesn't work
+        pass
     
     # Configure labelframe styling
     style.configure('TLabelframe.Label', font=('Segoe UI', 9, 'bold'))
