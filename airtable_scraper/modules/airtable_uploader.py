@@ -59,6 +59,33 @@ class AirtableUploader:
                 clean_fields[key] = value
         
         return clean_fields
+    
+    def _check_field_exists(self, table_key: str, field_name: str) -> bool:
+        """Check if a field exists in the table by attempting a test query"""
+        # This is cached after first check to avoid repeated API calls
+        cache_key = f"{table_key}_{field_name}"
+        if hasattr(self, '_field_existence_cache'):
+            if cache_key in self._field_existence_cache:
+                return self._field_existence_cache[cache_key]
+        else:
+            self._field_existence_cache = {}
+        
+        table_name = self.tables.get(table_key)
+        if not table_name:
+            self._field_existence_cache[cache_key] = False
+            return False
+        
+        try:
+            # Try to get records with just this field to test if it exists
+            params = {"maxRecords": 1, "fields": [field_name]}
+            resp = requests.get(f"{self.base_url}/{table_name}", headers=self.headers, params=params, timeout=30)
+            # Field exists if we don't get a 422 error about unknown field
+            exists = resp.status_code != 422
+            self._field_existence_cache[cache_key] = exists
+            return exists
+        except:
+            self._field_existence_cache[cache_key] = False
+            return False
 
     # a: Read already uploaded data
     def fetch_existing_records(self, sync_types=None):
@@ -95,7 +122,7 @@ class AirtableUploader:
             self._fetch_table_map("lenses", "lens_name")
         
         if "sources" in tables_to_fetch:
-            # Map sources using composite keys (content + lense + base_folder)
+            # Map sources using available fields (now only content + Patterns relationship)
             table_name = self.tables.get("sources")
             if table_name:
                 records = self._get_all_records(table_name)
@@ -103,18 +130,16 @@ class AirtableUploader:
                 for r in records:
                     fields = r.get("fields", {})
                     content = fields.get("content", "")
-                    lense = fields.get("lense", "")
-                    base_folder = fields.get("base_folder", "")
-                    record_name = r.get("name", "")
                     
-                    # Create composite key for proper uniqueness detection
-                    if content and lense:
-                        composite_key = f"{content}|{lense}|{base_folder}"
-                        content_hash = str(hash(composite_key))
-                        self.record_map["sources"][content_hash] = r["id"]
-                        count += 1
+                    # Use content as the primary key since lense and base_folder no longer exist
+                    if content:
+                        normalized_key = self.normalize_for_matching(content)
+                        if normalized_key:
+                            self.record_map["sources"][normalized_key] = r["id"]
+                            count += 1
                     
                     # Also map by record name for pattern linking
+                    record_name = r.get("name", "")
                     if record_name:
                         normalized_key = self.normalize_for_matching(record_name)
                         if normalized_key:
@@ -172,9 +197,9 @@ class AirtableUploader:
                 
         return all_records
 
-    def _create_or_update(self, table_key: str, unique_val: str, fields: Dict) -> str:
+    def _create_or_update(self, table_key: str, unique_val: str, fields: Dict, force_update: bool = False) -> str:
         """
-        Uploads data. If exists, returns ID and updates; otherwise creates new record.
+        Uploads data. If exists, returns ID and optionally updates; otherwise creates new record.
         Returns: Record ID
         """
         if not unique_val: return None
@@ -187,22 +212,35 @@ class AirtableUploader:
         existing_id = self.record_map[table_key].get(normalized_key)
         
         if existing_id:
-            # Update existing record to ensure data is fresh
-            url = f"{self.base_url}/{table_name}/{existing_id}"
-            try:
-                resp = requests.patch(url, headers=self.headers, json={"fields": fields}, timeout=30)
-                resp.raise_for_status()
-                self.log(f"Updated existing {table_key}: {unique_val}")
-                return existing_id
-            except Exception as e:
-                self.log(f"Failed to update {table_key} ({unique_val}): {str(e)}", "error")
+            if force_update:
+                # Update existing record to ensure data is fresh
+                url = f"{self.base_url}/{table_name}/{existing_id}"
+                try:
+                    # Filter fields to only include those that exist in the table
+                    filtered_fields = self._filter_existing_fields(table_key, fields)
+                    resp = requests.patch(url, headers=self.headers, json={"fields": filtered_fields}, timeout=30)
+                    resp.raise_for_status()
+                    self.log(f"Updated existing {table_key}: {unique_val}")
+                    return existing_id
+                except Exception as e:
+                    self.log(f"Failed to update {table_key} ({unique_val}): {str(e)}", "error")
+                    return existing_id
+            else:
+                # Skip existing records by default to prevent duplicates
+                self.log(f"Skipped existing {table_key}: {unique_val}")
                 return existing_id
         else:
             # Create new record
             url = f"{self.base_url}/{table_name}"
             try:
-                # Validate fields before sending
-                clean_fields = self._validate_fields(fields, table_key)
+                # Filter and validate fields before sending
+                filtered_fields = self._filter_existing_fields(table_key, fields)
+                clean_fields = self._validate_fields(filtered_fields, table_key)
+                
+                if not clean_fields:
+                    self.log(f"No valid fields to create {table_key} ({unique_val})", "error")
+                    return None
+                
                 resp = requests.post(url, headers=self.headers, json={"fields": clean_fields}, timeout=30)
                 resp.raise_for_status()
                 new_id = resp.json()["id"]
@@ -213,21 +251,52 @@ class AirtableUploader:
             except requests.exceptions.HTTPError as e:
                 if e.response.status_code == 422:
                     self.log(f"Field validation error for {table_key} ({unique_val}): {e.response.text}", "error")
-                    # Provide suggestions for common field name issues
-                    if "Unknown field name" in e.response.text and table_key == "variations":
-                        self.log("SUGGESTION: Check your Airtable variations table field names. Try: 'Pattern', 'Patterns', 'pattern_title'", "error")
+                    # Try to create with only the primary field if possible
+                    primary_field = self._get_primary_field(table_key)
+                    if primary_field and primary_field in fields:
+                        try:
+                            minimal_fields = {primary_field: fields[primary_field]}
+                            resp = requests.post(url, headers=self.headers, json={"fields": minimal_fields}, timeout=30)
+                            resp.raise_for_status()
+                            new_id = resp.json()["id"]
+                            self.record_map[table_key][normalized_key] = new_id
+                            self.log(f"Created minimal {table_key}: {unique_val} (only primary field)")
+                            return new_id
+                        except:
+                            pass
                 else:
                     self.log(f"HTTP error creating {table_key} ({unique_val}): {str(e)}", "error")
                 return None
             except Exception as e:
                 self.log(f"Failed to create {table_key} ({unique_val}): {str(e)}", "error")
                 return None
+    
+    def _filter_existing_fields(self, table_key: str, fields: Dict) -> Dict:
+        """Filter fields to only include those that exist in the Airtable"""
+        filtered = {}
+        for field_name, value in fields.items():
+            if self._check_field_exists(table_key, field_name):
+                filtered[field_name] = value
+            else:
+                self.log(f"Skipping non-existent field '{field_name}' for {table_key}")
+        return filtered
+    
+    def _get_primary_field(self, table_key: str) -> str:
+        """Get the primary field name for each table type"""
+        primary_fields = {
+            "sources": "content",
+            "variations": "variation_title", 
+            "patterns": "pattern_title",
+            "lenses": "lens_name",
+            "metas": "title"
+        }
+        return primary_fields.get(table_key)
 
     def _link_source_to_pattern(self, source_id: str, pattern_id: str):
         """Helper method to link a source to a pattern via the Patterns relation field"""
         try:
             # Get current source record to see existing pattern links
-            url = f"{self.base_url}/sources/{source_id}"
+            url = f"{self.base_url}/Sources/{source_id}"
             resp = requests.get(url, headers=self.headers, timeout=30)
             resp.raise_for_status()
             
@@ -244,6 +313,57 @@ class AirtableUploader:
                 
         except Exception as e:
             self.log(f"Error linking source {source_id} to pattern {pattern_id}: {str(e)}", "error")
+    
+    def _sync_source_pattern_relationships(self, data: Dict):
+        """Sync relationships between sources and patterns"""
+        self.log("Linking sources to patterns...")
+        links_created = 0
+        
+        for doc in data.get("documents", []):
+            for pattern in doc.get("patterns", []):
+                pattern_title = pattern.get("title")
+                pattern_id = self.record_map["patterns"].get(self.normalize_for_matching(pattern_title)) if pattern_title else None
+                
+                if pattern_id:
+                    # Link all sources in this pattern
+                    for source in pattern.get("parsed_sources", []):
+                        source_content = source.get("content")
+                        if source_content:
+                            source_id = self.record_map["sources"].get(self.normalize_for_matching(source_content))
+                            if source_id:
+                                self._link_source_to_pattern(source_id, pattern_id)
+                                links_created += 1
+        
+        self.log(f"✅ Source-Pattern relationships synced: {links_created} links")
+    
+    def _sync_variation_pattern_relationships(self, data: Dict):
+        """Sync relationships between variations and patterns"""
+        self.log("Linking variations to patterns...")
+        links_created = 0
+        
+        for doc in data.get("documents", []):
+            for pattern in doc.get("patterns", []):
+                pattern_title = pattern.get("title")
+                pattern_id = self.record_map["patterns"].get(self.normalize_for_matching(pattern_title)) if pattern_title else None
+                
+                if pattern_id:
+                    # Link all variations in this pattern
+                    for variation in pattern.get("variations", []):
+                        variation_title = variation.get("title")
+                        if variation_title:
+                            variation_id = self.record_map["variations"].get(self.normalize_for_matching(variation_title))
+                            if variation_id:
+                                # Update variation with pattern reference
+                                try:
+                                    url = f"{self.base_url}/Variations/{variation_id}"
+                                    update_fields = {"pattern_reference": [pattern_id]}
+                                    resp = requests.patch(url, headers=self.headers, json={"fields": update_fields}, timeout=30)
+                                    resp.raise_for_status()
+                                    links_created += 1
+                                except Exception as e:
+                                    self.log(f"Error linking variation {variation_id} to pattern {pattern_id}: {str(e)}", "error")
+        
+        self.log(f"✅ Variation-Pattern relationships synced: {links_created} links")
 
     # b: Match and update
     def sync_data(self, data: Dict, sync_types: List[str] = None, enable_linking: bool = False):
@@ -283,6 +403,14 @@ class AirtableUploader:
             self.log("🔄 [5/5] Syncing Variations...")
             self._sync_variations(data, enable_linking)
         
+        # Handle relationship syncing for individual table operations with --sync flag
+        if enable_linking and len(sync_types) == 1:
+            self.log(f"🔗 Syncing relationships for {sync_types[0]} (--sync flag detected)...")
+            if "sources" in sync_types:
+                self._sync_source_pattern_relationships(data)
+            elif "variations" in sync_types:
+                self._sync_variation_pattern_relationships(data)
+        
         # Log sync summary
         total_records = sum(len(cache) for cache in self.record_map.values())
         self.log(f"Sync complete. Total records in cache: {total_records}")
@@ -309,7 +437,7 @@ class AirtableUploader:
                     "content": meta.get("content", ""),
                     "base_folder": base_folder  # Add base_folder field as single line string
                 }
-                result = self._create_or_update("metas", meta_title, fields)
+                result = self._create_or_update("metas", meta_title, fields, force_update=False)
                 if result:
                     metas_synced += 1
                     self.log(f"Meta '{meta_title}' synced successfully")
@@ -327,21 +455,18 @@ class AirtableUploader:
                     "lens_name": lens_name,  # PRIMARY FIELD (not lens_title)
                     "content": doc.get("summary", "")  # Use summary as content
                 }
-                result = self._create_or_update("lenses", lens_name, fields)
+                result = self._create_or_update("lenses", lens_name, fields, force_update=False)
                 if result:
                     lenses_synced += 1
         
         self.log(f"✅ Lenses sync complete: {lenses_synced} records")
 
     def _sync_sources(self, data: Dict):
-        """Sync Sources with correct field names"""
+        """Sync Sources with available fields (content only, Patterns relationship handled separately)"""
         sources_synced = 0
         
         # Process sources from patterns within each document
         for doc in data.get("documents", []):
-            lens_name = doc.get("lens", "")
-            base_folder = doc.get("base_folder", "")
-            
             # Sources are nested within patterns
             for pattern in doc.get("patterns", []):
                 for source in pattern.get("parsed_sources", []):
@@ -349,11 +474,10 @@ class AirtableUploader:
                     
                     if source_content:
                         fields = {
-                            "content": source_content,  # PRIMARY FIELD
-                            "lense": lens_name,  # Note: "lense" not "lens"
-                            "base_folder": base_folder
+                            "content": source_content  # PRIMARY FIELD (only field available now)
                         }
-                        result = self._create_or_update("sources", source_content, fields)
+                        # Note: Patterns relationship will be handled in pattern sync
+                        result = self._create_or_update("sources", source_content, fields, force_update=False)
                         if result:
                             sources_synced += 1
                             self.log(f"Source '{source_content[:50]}...' synced")
@@ -364,11 +488,9 @@ class AirtableUploader:
             
             if source_content:
                 fields = {
-                    "content": source_content,  # PRIMARY FIELD
-                    "lense": source.get("lens", ""),  # Note: "lense" not "lens" 
-                    "base_folder": source.get("base_folder", "")
+                    "content": source_content  # PRIMARY FIELD (only field available now)
                 }
-                result = self._create_or_update("sources", source_content, fields)
+                result = self._create_or_update("sources", source_content, fields, force_update=False)
                 if result:
                     sources_synced += 1
                     self.log(f"Standalone source '{source_content[:50]}...' synced")
@@ -399,9 +521,7 @@ class AirtableUploader:
                     if variation_title:
                         fields = {
                             "variation_title": variation_title,  # PRIMARY FIELD
-                            "content": variation.get("content", ""),
-                            "lens": lens_name or "",
-                            "base_folder": base_folder or ""
+                            "content": variation.get("content", "")
                         }
                         
                         # Add pattern linking if enabled and pattern exists
@@ -412,19 +532,10 @@ class AirtableUploader:
                         else:
                             pattern_link_msg = " (no pattern link)"
                         
-                        # Add lens linking if enabled and lens exists
-                        lens_link_msg = ""
-                        if enable_linking and lens_name:
-                            lens_id = self.record_map["lenses"].get(self.normalize_for_matching(lens_name))
-                            if lens_id:
-                                fields["lense_link"] = [lens_id]  # Link to Lenses table
-                                lens_link_msg = f" → lens: '{lens_name}'"
-                            else:
-                                lens_link_msg = f" (lens '{lens_name}' not found)"
+                        # Note: lens and base_folder fields no longer exist in Variations table
+                        link_msg = pattern_link_msg
                         
-                        link_msg = pattern_link_msg + lens_link_msg
-                        
-                        result = self._create_or_update("variations", variation_title, fields)
+                        result = self._create_or_update("variations", variation_title, fields, force_update=False)
                         if result:
                             variations_synced += 1
                             self.log(f"Variation '{variation_title}'{link_msg}")
@@ -493,7 +604,7 @@ class AirtableUploader:
                             if meta_ids:
                                 fields["Metas"] = meta_ids  # Link to Metas table
                     
-                    result = self._create_or_update("patterns", pattern_title, fields)
+                    result = self._create_or_update("patterns", pattern_title, fields, force_update=False)
                     if result:
                         patterns_synced += 1
                         links = []

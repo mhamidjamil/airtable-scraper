@@ -14,6 +14,10 @@ import os
 from pathlib import Path
 from datetime import datetime
 import logging
+try:
+    from tkinter import font as tkFont
+except ImportError:
+    pass
 
 # Add the parent directory to the path so we can import our modules
 sys.path.insert(0, str(Path(__file__).parent))
@@ -34,9 +38,16 @@ class LogHandler(logging.Handler):
 class AirtableScraperGUI:
     def __init__(self, root):
         self.root = root
-        self.root.title("Airtable Scraper - GUI Interface")
-        self.root.geometry("1000x700")
-        self.root.minsize(800, 600)
+        self.root.title("Airtable Scraper Pro - Document Processing Suite")
+        self.root.geometry("1000x650")  # More compact size
+        self.root.minsize(900, 600)     # Smaller minimum size
+        
+        # Set application icon and styling
+        try:
+            # Try to set a nice color scheme
+            self.root.configure(bg='#f0f0f0')
+        except:
+            pass
         
         # Initialize variables
         self.project_folder = tk.StringVar(value="BIOME")
@@ -58,121 +69,236 @@ class AirtableScraperGUI:
         self.setup_logging()
         self.check_log_queue()
         
+        # Test initial connection
+        self.root.after(1000, self.test_airtable_connection_silent)
+        
     def setup_ui(self):
         """Setup the main user interface"""
-        # Create main frame with padding
-        main_frame = ttk.Frame(self.root, padding="10")
+        # Create main frame with minimal padding for more space
+        main_frame = ttk.Frame(self.root, padding="5")
         main_frame.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
         
-        # Configure grid weights for responsiveness
+        # Configure grid weights for better responsiveness
         self.root.columnconfigure(0, weight=1)
         self.root.rowconfigure(0, weight=1)
         main_frame.columnconfigure(1, weight=1)
-        main_frame.rowconfigure(6, weight=1)
+        main_frame.rowconfigure(9, weight=1)  # Log area gets most space
         
-        # Title
-        title_label = ttk.Label(main_frame, text="Airtable Scraper", 
-                               font=("Arial", 16, "bold"))
-        title_label.grid(row=0, column=0, columnspan=3, pady=(0, 20))
+        # Compact Professional Header
+        header_frame = ttk.Frame(main_frame)
+        header_frame.grid(row=0, column=0, columnspan=3, pady=(0, 15), sticky=(tk.W, tk.E))
+        header_frame.columnconfigure(1, weight=1)
         
-        # Project Folder Selection
-        ttk.Label(main_frame, text="Project Folder:", 
-                 font=("Arial", 10, "bold")).grid(row=1, column=0, sticky=tk.W, pady=5)
+        # Main title - Compact
+        title_label = ttk.Label(header_frame, text="🔥 Airtable Scraper Pro", 
+                               font=("Segoe UI", 16, "bold"))
+        title_label.grid(row=0, column=0, columnspan=3, pady=(0, 3))
+        
+        # Subtitle - Compact
+        subtitle_label = ttk.Label(header_frame, text="Document Processing & Data Sync", 
+                                  font=("Segoe UI", 9), foreground="#666666")
+        subtitle_label.grid(row=1, column=0, columnspan=3, pady=(0, 5))
+        
+        # Status indicator
+        self.connection_status = ttk.Label(header_frame, text="●", font=("Segoe UI", 12), foreground="orange")
+        self.connection_status.grid(row=0, column=2, sticky=tk.E)
+        self.create_tooltip(self.connection_status, "Connection Status: Not checked")
+        
+        # Project Folder Selection with enhanced styling
+        folder_label = ttk.Label(main_frame, text="📁 Project Folder", 
+                                font=("Segoe UI", 11, "bold"))
+        folder_label.grid(row=1, column=0, sticky=tk.W, pady=(5, 2))
+        
+        folder_desc = ttk.Label(main_frame, text="Select the folder containing your DOCX files to process", 
+                               font=("Segoe UI", 9), foreground="#666666")
+        folder_desc.grid(row=2, column=0, columnspan=3, sticky=tk.W, pady=(0, 10))
         
         folder_frame = ttk.Frame(main_frame)
-        folder_frame.grid(row=1, column=1, columnspan=2, sticky=(tk.W, tk.E), pady=5)
+        folder_frame.grid(row=3, column=0, columnspan=3, sticky=(tk.W, tk.E), pady=(0, 15))
         folder_frame.columnconfigure(0, weight=1)
         
         self.folder_entry = ttk.Entry(folder_frame, textvariable=self.project_folder, 
-                                     font=("Arial", 10))
-        self.folder_entry.grid(row=0, column=0, sticky=(tk.W, tk.E), padx=(0, 5))
+                                     font=("Segoe UI", 10), width=60)
+        self.folder_entry.grid(row=0, column=0, sticky=(tk.W, tk.E), padx=(0, 10))
         
-        ttk.Button(folder_frame, text="Browse", 
-                  command=self.browse_folder).grid(row=0, column=1)
+        browse_btn = ttk.Button(folder_frame, text="📂 Browse", 
+                               command=self.browse_folder)
+        browse_btn.grid(row=0, column=1)
+        self.create_tooltip(browse_btn, "Browse for project folder containing DOCX files")
         
-        # Operation Mode
-        mode_frame = ttk.LabelFrame(main_frame, text="Operation Mode", padding="5")
-        mode_frame.grid(row=2, column=0, columnspan=3, sticky=(tk.W, tk.E), pady=10)
-        mode_frame.columnconfigure(0, weight=1)
+        # Operation Mode - Compact single row
+        mode_frame = ttk.LabelFrame(main_frame, text="🎯 Operation Mode", padding="10")
+        mode_frame.grid(row=4, column=0, columnspan=3, sticky=(tk.W, tk.E), pady=(0, 15))
+        mode_frame.columnconfigure(2, weight=1)
         
-        ttk.Radiobutton(mode_frame, text="Extract and Sync to Airtable (Default)", 
-                       variable=self.extract_only, value=False).grid(row=0, column=0, sticky=tk.W)
-        ttk.Radiobutton(mode_frame, text="Extract Only (Skip Airtable Sync)", 
-                       variable=self.extract_only, value=True).grid(row=1, column=0, sticky=tk.W)
+        sync_radio = ttk.Radiobutton(mode_frame, text="🔄 Extract & Sync", 
+                                    variable=self.extract_only, value=False)
+        sync_radio.grid(row=0, column=0, sticky=tk.W, padx=(0, 20))
+        self.create_tooltip(sync_radio, "Extract data from documents and upload to Airtable database")
         
-        # Data Types Selection
-        sync_frame = ttk.LabelFrame(main_frame, text="Data Types to Process", padding="5")
-        sync_frame.grid(row=3, column=0, columnspan=3, sticky=(tk.W, tk.E), pady=10)
+        extract_radio = ttk.Radiobutton(mode_frame, text="📤 Extract Only", 
+                                       variable=self.extract_only, value=True)
+        extract_radio.grid(row=0, column=1, sticky=tk.W)
+        self.create_tooltip(extract_radio, "Extract data without uploading (for testing or offline processing)")
         
-        # Create two columns for checkboxes
-        left_col = ttk.Frame(sync_frame)
-        left_col.grid(row=0, column=0, sticky=(tk.W, tk.N), padx=(0, 20))
-        right_col = ttk.Frame(sync_frame)
-        right_col.grid(row=0, column=1, sticky=(tk.W, tk.N))
+        # Data Types Selection - Single row layout
+        sync_frame = ttk.LabelFrame(main_frame, text="🗂️ Data Types", padding="10")
+        sync_frame.grid(row=5, column=0, columnspan=3, sticky=(tk.W, tk.E), pady=(0, 15))
+        sync_frame.columnconfigure(5, weight=1)
         
-        ttk.Checkbutton(left_col, text="Lenses", 
-                       variable=self.sync_lenses).grid(row=0, column=0, sticky=tk.W)
-        ttk.Checkbutton(left_col, text="Sources", 
-                       variable=self.sync_sources).grid(row=1, column=0, sticky=tk.W)
-        ttk.Checkbutton(left_col, text="Metas", 
-                       variable=self.sync_metas).grid(row=2, column=0, sticky=tk.W)
+        # Single row of checkboxes
+        lenses_cb = ttk.Checkbutton(sync_frame, text="📖 Lenses", variable=self.sync_lenses)
+        lenses_cb.grid(row=0, column=0, sticky=tk.W, padx=(0, 15))
+        self.create_tooltip(lenses_cb, "Conceptual frameworks and perspectives")
         
-        ttk.Checkbutton(right_col, text="Patterns", 
-                       variable=self.sync_patterns).grid(row=0, column=0, sticky=tk.W)
-        ttk.Checkbutton(right_col, text="Variations", 
-                       variable=self.sync_variations).grid(row=1, column=0, sticky=tk.W)
+        sources_cb = ttk.Checkbutton(sync_frame, text="📚 Sources", variable=self.sync_sources)
+        sources_cb.grid(row=0, column=1, sticky=tk.W, padx=(0, 15))
+        self.create_tooltip(sources_cb, "Reference materials and citations")
         
-        # Selection buttons
+        metas_cb = ttk.Checkbutton(sync_frame, text="📋 Metas", variable=self.sync_metas)
+        metas_cb.grid(row=0, column=2, sticky=tk.W, padx=(0, 15))
+        self.create_tooltip(metas_cb, "Document metadata and information")
+        
+        patterns_cb = ttk.Checkbutton(sync_frame, text="🎯 Patterns", variable=self.sync_patterns)
+        patterns_cb.grid(row=0, column=3, sticky=tk.W, padx=(0, 15))
+        self.create_tooltip(patterns_cb, "Core structural patterns and frameworks")
+        
+        variations_cb = ttk.Checkbutton(sync_frame, text="🔄 Variations", variable=self.sync_variations)
+        variations_cb.grid(row=0, column=4, sticky=tk.W, padx=(0, 15))
+        self.create_tooltip(variations_cb, "Pattern variations and implementations")
+        
+        # Selection buttons - More compact
         button_frame = ttk.Frame(sync_frame)
-        button_frame.grid(row=1, column=0, columnspan=2, pady=(10, 0))
+        button_frame.grid(row=1, column=0, columnspan=5, pady=(10, 0), sticky=tk.W)
         
-        ttk.Button(button_frame, text="Select All", 
-                  command=self.select_all_types).grid(row=0, column=0, padx=(0, 5))
-        ttk.Button(button_frame, text="Deselect All", 
-                  command=self.deselect_all_types).grid(row=0, column=1, padx=(5, 0))
+        select_all_btn = ttk.Button(button_frame, text="✅ All", 
+                                   command=self.select_all_types)
+        select_all_btn.grid(row=0, column=0, padx=(0, 10))
+        self.create_tooltip(select_all_btn, "Select all data types for processing")
         
-        # Sync Options
-        options_frame = ttk.LabelFrame(main_frame, text="Sync Options", padding="5")
-        options_frame.grid(row=4, column=0, columnspan=3, sticky=(tk.W, tk.E), pady=10)
+        deselect_all_btn = ttk.Button(button_frame, text="❌ None", 
+                                     command=self.deselect_all_types)
+        deselect_all_btn.grid(row=0, column=1, padx=(0, 15))
+        self.create_tooltip(deselect_all_btn, "Deselect all data types")
         
-        ttk.Checkbutton(options_frame, text="Enable relationship linking (--sync)", 
-                       variable=self.enable_sync).grid(row=0, column=0, sticky=tk.W)
+        # Add compact status info
+        ttk.Label(button_frame, text="💡 Variations auto-include Patterns", 
+                 font=("Segoe UI", 8), foreground="#0066cc").grid(row=0, column=2, padx=(10, 0))
         
-        # Action Buttons
+        # Sync Options with enhanced design
+        options_frame = ttk.LabelFrame(main_frame, text="⚙️ Advanced Options", padding="15")
+        options_frame.grid(row=6, column=0, columnspan=3, sticky=(tk.W, tk.E), pady=(0, 20))
+        
+        sync_checkbox = ttk.Checkbutton(options_frame, text="🔗 Enable relationship linking (--sync)", 
+                                       variable=self.enable_sync)
+        sync_checkbox.grid(row=0, column=0, sticky=tk.W)
+        self.create_tooltip(sync_checkbox, "Connect related records in Airtable (sources to patterns, etc.)")
+        
+        # Action Buttons with better visibility
         action_frame = ttk.Frame(main_frame)
-        action_frame.grid(row=5, column=0, columnspan=3, pady=20)
+        action_frame.grid(row=7, column=0, columnspan=3, pady=(0, 15))
         
-        self.start_button = ttk.Button(action_frame, text="Start Processing", 
-                                      command=self.start_processing, 
-                                      style="Accent.TButton")
-        self.start_button.grid(row=0, column=0, padx=(0, 10))
+        # Create a visible start button with better styling
+        self.start_button = ttk.Button(action_frame, text="🚀 START PROCESSING", 
+                                      command=self.start_processing,
+                                      style="Start.TButton")
+        self.start_button.grid(row=0, column=0, padx=(0, 15), pady=2)
+        self.create_tooltip(self.start_button, "Begin data extraction and processing")
         
-        self.stop_button = ttk.Button(action_frame, text="Stop", 
+        self.stop_button = ttk.Button(action_frame, text="🛑 Stop", 
                                      command=self.stop_processing, state="disabled")
-        self.stop_button.grid(row=0, column=1, padx=(10, 0))
+        self.stop_button.grid(row=0, column=1, padx=(0, 15))
+        self.create_tooltip(self.stop_button, "Cancel current processing operation")
         
-        # Progress Bar
-        self.progress = ttk.Progressbar(main_frame, mode='indeterminate')
-        self.progress.grid(row=5, column=0, columnspan=3, sticky=(tk.W, tk.E), pady=(60, 0))
+        # Add test connection button
+        test_btn = ttk.Button(action_frame, text="🔧 Test Connection", 
+                             command=self.test_airtable_connection)
+        test_btn.grid(row=0, column=2)
+        self.create_tooltip(test_btn, "Test Airtable connection and credentials")
         
-        # Log Display
-        log_frame = ttk.LabelFrame(main_frame, text="Processing Log", padding="5")
-        log_frame.grid(row=6, column=0, columnspan=3, sticky=(tk.W, tk.E, tk.N, tk.S), pady=(10, 0))
+        # Progress Bar with label
+        progress_frame = ttk.Frame(main_frame)
+        progress_frame.grid(row=8, column=0, columnspan=3, sticky=(tk.W, tk.E), pady=(10, 0))
+        progress_frame.columnconfigure(0, weight=1)
+        
+        self.progress_label = ttk.Label(progress_frame, text="Ready to process", 
+                                       font=("Segoe UI", 9), foreground="#666666")
+        self.progress_label.grid(row=0, column=0, sticky=tk.W, pady=(0, 5))
+        
+        self.progress = ttk.Progressbar(progress_frame, mode='indeterminate')
+        self.progress.grid(row=1, column=0, sticky=(tk.W, tk.E))
+        
+        # Scrollable Log Display - Optimized for screen space
+        log_frame = ttk.LabelFrame(main_frame, text="📝 Log", padding="5")
+        log_frame.grid(row=9, column=0, columnspan=3, sticky=(tk.W, tk.E, tk.N, tk.S), pady=(10, 0))
         log_frame.columnconfigure(0, weight=1)
-        log_frame.rowconfigure(0, weight=1)
+        log_frame.rowconfigure(1, weight=1)
         
-        self.log_display = scrolledtext.ScrolledText(log_frame, height=15, width=80, 
-                                                    font=("Consolas", 9))
-        self.log_display.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
+        # Compact log controls
+        log_controls = ttk.Frame(log_frame)
+        log_controls.grid(row=0, column=0, sticky=(tk.W, tk.E), pady=(0, 5))
+        log_controls.columnconfigure(0, weight=1)
         
-        # Status Bar
-        self.status_var = tk.StringVar(value="Ready")
-        status_bar = ttk.Label(main_frame, textvariable=self.status_var, 
-                              relief=tk.SUNKEN, anchor=tk.W)
-        status_bar.grid(row=7, column=0, columnspan=3, sticky=(tk.W, tk.E), pady=(10, 0))
+        ttk.Label(log_controls, text="Real-time processing info", 
+                 font=("Segoe UI", 8), foreground="#666666").grid(row=0, column=0, sticky=tk.W)
+        
+        clear_log_btn = ttk.Button(log_controls, text="🗑️", command=self.clear_log, width=3)
+        clear_log_btn.grid(row=0, column=1)
+        self.create_tooltip(clear_log_btn, "Clear the log display")
+        
+        # Better contrast log display with proper scrolling and auto-sizing
+        self.log_display = scrolledtext.ScrolledText(log_frame, height=10, width=85, 
+                                                    font=("Consolas", 8), wrap=tk.WORD,
+                                                    bg="#f8f8f8", fg="#333333",
+                                                    insertbackground="#333333",
+                                                    selectbackground="#0078d4",
+                                                    selectforeground="white")
+        self.log_display.grid(row=1, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
+        
+        # Enable automatic scrolling to bottom
+        self.auto_scroll = True
+        
+        # Status Bar with enhanced styling
+        status_frame = ttk.Frame(main_frame)
+        status_frame.grid(row=10, column=0, columnspan=3, sticky=(tk.W, tk.E), pady=(15, 0))
+        status_frame.columnconfigure(1, weight=1)
+        
+        ttk.Label(status_frame, text="Status:").grid(row=0, column=0, padx=(0, 5))
+        self.status_var = tk.StringVar(value="Ready - Select folder and options to begin")
+        status_label = ttk.Label(status_frame, textvariable=self.status_var, 
+                                font=("Segoe UI", 9), foreground="#0066cc")
+        status_label.grid(row=0, column=1, sticky=tk.W)
+        
+        # Add version info
+        version_label = ttk.Label(status_frame, text="v2.0 Pro", 
+                                 font=("Segoe UI", 8), foreground="#999999")
+        version_label.grid(row=0, column=2, sticky=tk.E)
         
         # Menu Bar
         self.create_menu()
+        
+        # Initialize tooltips
+        self.tooltips = []
+    
+    def create_tooltip(self, widget, text):
+        """Create a tooltip for a widget"""
+        def on_enter(event):
+            tooltip = tk.Toplevel()
+            tooltip.wm_overrideredirect(True)
+            tooltip.wm_geometry(f"+{event.x_root + 10}+{event.y_root + 10}")
+            tooltip.configure(bg='#ffffe0', relief='solid', borderwidth=1)
+            label = tk.Label(tooltip, text=text, bg='#ffffe0', fg='#000000', 
+                           font=("Segoe UI", 9), padx=5, pady=3)
+            label.pack()
+            widget.tooltip = tooltip
+        
+        def on_leave(event):
+            if hasattr(widget, 'tooltip'):
+                widget.tooltip.destroy()
+                delattr(widget, 'tooltip')
+        
+        widget.bind('<Enter>', on_enter)
+        widget.bind('<Leave>', on_leave)
         
     def create_menu(self):
         """Create the application menu bar"""
@@ -218,12 +344,35 @@ class AirtableScraperGUI:
         self.logger.addHandler(handler)
         
     def check_log_queue(self):
-        """Check for new log messages and display them"""
+        """Check for new log messages and display them with color coding"""
         try:
             while True:
                 message = self.log_queue.get_nowait()
-                self.log_display.insert(tk.END, message + "\n")
-                self.log_display.see(tk.END)
+                
+                # Configure text tags for different log levels if not already done
+                if not hasattr(self, '_tags_configured'):
+                    self.log_display.tag_configure("INFO", foreground="#0066cc")
+                    self.log_display.tag_configure("WARNING", foreground="#ff8c00")
+                    self.log_display.tag_configure("ERROR", foreground="#dc3545")
+                    self.log_display.tag_configure("SUCCESS", foreground="#28a745")
+                    self._tags_configured = True
+                
+                # Determine tag based on message content
+                tag = "INFO"  # default
+                if "[WARNING]" in message or "Warning" in message:
+                    tag = "WARNING"
+                elif "[ERROR]" in message or "Error" in message or "Failed" in message:
+                    tag = "ERROR"
+                elif "✅" in message or "SUCCESS" in message or "Complete" in message:
+                    tag = "SUCCESS"
+                
+                self.log_display.insert(tk.END, message + "\n", tag)
+                if self.auto_scroll:
+                    self.log_display.see(tk.END)
+                    # Limit log size to prevent memory issues
+                    lines = int(self.log_display.index('end-1c').split('.')[0])
+                    if lines > 1000:
+                        self.log_display.delete('1.0', '100.0')
         except queue.Empty:
             pass
         finally:
@@ -262,6 +411,71 @@ class AirtableScraperGUI:
         self.sync_metas.set(False)
         self.sync_patterns.set(False)
         self.sync_variations.set(False)
+    
+    def test_airtable_connection(self):
+        """Test Airtable connection and update status"""
+        if not settings.AIRTABLE_CONFIG.get("api_token") or not settings.AIRTABLE_CONFIG.get("base_id"):
+            self.connection_status.config(foreground="red", text="✗")
+            self.create_tooltip(self.connection_status, "Connection Status: Not configured")
+            messagebox.showwarning("Configuration Missing", 
+                                 "Airtable credentials not configured.\n\nPlease go to Settings → Configure Airtable to set up your API token and Base ID.")
+            return False
+        
+        try:
+            import requests
+            headers = {
+                "Authorization": f"Bearer {settings.AIRTABLE_CONFIG['api_token']}",
+                "Content-Type": "application/json"
+            }
+            base_url = f"https://api.airtable.com/v0/{settings.AIRTABLE_CONFIG['base_id']}"
+            
+            # Test connection with a simple API call
+            resp = requests.get(f"{base_url}/Sources?maxRecords=1", headers=headers, timeout=10)
+            
+            if resp.status_code == 200:
+                self.connection_status.config(foreground="green", text="✓")
+                self.create_tooltip(self.connection_status, "Connection Status: Connected successfully")
+                messagebox.showinfo("Connection Success", "Successfully connected to Airtable!")
+                return True
+            else:
+                self.connection_status.config(foreground="red", text="✗")
+                self.create_tooltip(self.connection_status, f"Connection Status: Error {resp.status_code}")
+                messagebox.showerror("Connection Failed", 
+                                   f"Failed to connect to Airtable.\n\nStatus Code: {resp.status_code}\nResponse: {resp.text[:200]}...")
+                return False
+                
+        except Exception as e:
+            self.connection_status.config(foreground="red", text="✗")
+            self.create_tooltip(self.connection_status, f"Connection Status: Error - {str(e)}")
+            messagebox.showerror("Connection Error", f"Error testing connection:\n\n{str(e)}")
+            return False
+    
+    def test_airtable_connection_silent(self):
+        """Test connection silently on startup"""
+        if not settings.AIRTABLE_CONFIG.get("api_token") or not settings.AIRTABLE_CONFIG.get("base_id"):
+            self.connection_status.config(foreground="orange", text="●")
+            self.create_tooltip(self.connection_status, "Connection Status: Not configured")
+            return
+        
+        try:
+            import requests
+            headers = {
+                "Authorization": f"Bearer {settings.AIRTABLE_CONFIG['api_token']}",
+                "Content-Type": "application/json"
+            }
+            base_url = f"https://api.airtable.com/v0/{settings.AIRTABLE_CONFIG['base_id']}"
+            
+            resp = requests.get(f"{base_url}/Sources?maxRecords=1", headers=headers, timeout=5)
+            
+            if resp.status_code == 200:
+                self.connection_status.config(foreground="green", text="✓")
+                self.create_tooltip(self.connection_status, "Connection Status: Connected and ready")
+            else:
+                self.connection_status.config(foreground="red", text="✗")
+                self.create_tooltip(self.connection_status, f"Connection Status: Error {resp.status_code}")
+        except:
+            self.connection_status.config(foreground="orange", text="●")
+            self.create_tooltip(self.connection_status, "Connection Status: Could not verify")
     
     def get_selected_sync_types(self):
         """Get list of selected sync types"""
@@ -312,7 +526,8 @@ class AirtableScraperGUI:
         self.start_button.config(state="disabled")
         self.stop_button.config(state="normal")
         self.progress.start()
-        self.status_var.set("Processing...")
+        self.status_var.set("Processing documents...")
+        self.progress_label.config(text="Initializing processing pipeline...")
         self.clear_log()
         
         # Start processing in separate thread
@@ -325,7 +540,8 @@ class AirtableScraperGUI:
         self.start_button.config(state="normal")
         self.stop_button.config(state="disabled")
         self.progress.stop()
-        self.status_var.set("Stopped")
+        self.status_var.set("Processing cancelled by user")
+        self.progress_label.config(text="Operation cancelled")
         self.logger.warning("Processing stopped by user")
     
     def run_processing(self):
@@ -422,7 +638,8 @@ class AirtableScraperGUI:
         self.start_button.config(state="normal")
         self.stop_button.config(state="disabled")
         self.progress.stop()
-        self.status_var.set("Complete")
+        self.status_var.set("Processing completed successfully")
+        self.progress_label.config(text="Ready for next operation")
     
     def find_project_folders(self, start_path_str):
         """Find project folders to process (same logic as main.py)"""
@@ -509,21 +726,37 @@ Tables:
     
     def show_about(self):
         """Show about dialog"""
-        about_text = """Airtable Scraper GUI v1.0
+        about_text = """🚀 Airtable Scraper Pro v2.0
 
-A comprehensive tool for extracting data from DOCX files and syncing to Airtable.
+Professional Document Processing & Data Synchronization Suite
 
-Features:
-- Extract patterns, variations, sources, lenses, and metas from DOCX files
-- Intelligent project folder detection
-- Selective data type processing
-- Airtable synchronization with relationship linking
-- Extract-only mode for offline processing
-- Comprehensive logging and error handling
+✨ Key Features:
+• Advanced DOCX document parsing and extraction
+• Intelligent pattern and variation detection
+• Smart project folder auto-detection
+• Real-time Airtable synchronization
+• Relationship linking and data integrity
+• Professional user interface with tooltips
+• Comprehensive error handling and recovery
+• Background processing with progress tracking
 
-Developed for processing structured documents and managing data workflows.
+🎯 Data Types Supported:
+• Lenses - Conceptual frameworks and perspectives
+• Sources - Reference materials and citations  
+• Metas - Document metadata and information
+• Patterns - Core structural patterns
+• Variations - Pattern implementations and examples
+
+🔧 Technical Specifications:
+• Built with Python and tkinter
+• Multi-threaded processing architecture
+• Robust API error handling
+• Field existence validation
+• Automatic duplicate prevention
+
+© 2025 - Developed for professional document workflow management
 """
-        SettingsDialog(self.root, "About Airtable Scraper", about_text)
+        SettingsDialog(self.root, "About Airtable Scraper Pro", about_text)
     
     def show_usage_guide(self):
         """Show usage guide"""
@@ -702,18 +935,38 @@ def main():
     """Main function to run the GUI application"""
     root = tk.Tk()
     
-    # Set up ttk style
+    # Set up professional ttk styling
     style = ttk.Style()
     
-    # Try to use a modern theme if available
+    # Try to use a modern theme
     available_themes = style.theme_names()
-    if 'winnative' in available_themes:
+    if 'vista' in available_themes:
+        style.theme_use('vista')
+    elif 'winnative' in available_themes:
         style.theme_use('winnative')
     elif 'clam' in available_themes:
         style.theme_use('clam')
     
-    # Configure custom styles
-    style.configure('Accent.TButton', font=('Arial', 10, 'bold'))
+    # Configure custom professional styles for better visibility
+    style.configure('Accent.TButton', 
+                   font=('Segoe UI', 11, 'bold'),
+                   foreground='#ffffff',
+                   background='#0078d4')
+    
+    style.configure('Start.TButton', 
+                   font=('Segoe UI', 10, 'bold'),
+                   foreground='#ffffff',
+                   background='#107c10')
+    
+    # Configure labelframe styling
+    style.configure('TLabelframe.Label', font=('Segoe UI', 9, 'bold'))
+    style.configure('TLabelframe', padding=8)
+    
+    # Configure other elements for better readability
+    style.configure('TLabel', font=('Segoe UI', 9))
+    style.configure('TCheckbutton', font=('Segoe UI', 9))
+    style.configure('TRadiobutton', font=('Segoe UI', 9))
+    style.configure('TButton', font=('Segoe UI', 9))
     
     app = AirtableScraperGUI(root)
     
